@@ -35,8 +35,8 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: opts.max || 4096,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: opts.max || 2048,
       temperature: opts.temp ?? 0.7,
       system,
       messages: [{ role: 'user', content: user }],
@@ -58,19 +58,22 @@ export async function generateNanoBananaImage(prompt: string): Promise<string | 
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
+          },
         }),
       }
     );
 
     if (!res.ok) {
-      console.warn('[NanoBanana] Gemini', res.status);
+      const errText = await res.text();
+      console.error('[NanoBanana] Gemini', res.status, errText.slice(0, 300));
       return null;
     }
 
@@ -163,26 +166,12 @@ export async function generateHooks(
   topic: { title: string; description: string; relatedQueries: string[] },
   tone: string, count = 3
 ) {
+  const toneMap: Record<string, string> = { informative: '정보형', provocative: '자극형', storytelling: '스토리형' };
   const text = await callClaude(
-    `글로벌 SNS 바이럴 마케팅 전문가. 모든 출력은 한국어. 오타 없이 정확한 맞춤법 사용. JSON만 반환.`,
-    `다음 토픽으로 SNS 카루셀용 후킹 콘텐츠 ${count}개를 만드세요.
-
-토픽: ${topic.title}
-설명: ${topic.description}
-키워드: ${(topic.relatedQueries || []).join(', ')}
-톤: ${tone === 'informative' ? '정보 전달형 (데이터 중심)' : tone === 'provocative' ? '자극형 (논쟁/호기심)' : '스토리텔링 (감정/공감)'}
-
-규칙:
-- 모든 텍스트는 한국어
-- 오타/맞춤법 오류 절대 불가
-- headline: 시선을 사로잡는 제목 (15자 이내)
-- subheadline: 궁금증 유발 부제목 (30자 이내)
-- bodyPoints: 핵심 포인트 5개 (각 40자 이내)
-- callToAction: 행동 유도 (예: "지금 무료로 받기")
-- targetAudience: 타겟 독자
-
-[{"headline":"...","subheadline":"...","bodyPoints":["...","...","...","...","..."],"callToAction":"...","targetAudience":"..."}]`,
-    { temp: 0.8 }
+    'SNS 마케팅 전문가. 한국어. 오타금지. JSON만.',
+    `토픽:"${topic.title}" 톤:${toneMap[tone] || tone}
+후킹콘텐츠 ${count}개. [{"headline":"15자이내","subheadline":"30자이내","bodyPoints":["5개각40자"],"callToAction":"행동유도","targetAudience":"타겟"}]`,
+    { temp: 0.8, max: 1500 }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
@@ -193,47 +182,31 @@ export async function generateCarouselSlides(hook: {
   headline: string; subheadline: string; bodyPoints: string[]; callToAction: string;
 }) {
   const text = await callClaude(
-    `SNS 카루셀 디자이너. 한국어만 사용. 오타 없는 완벽한 맞춤법. JSON만 반환.`,
-    `Instagram 카루셀 7장 슬라이드 구성:
-
-헤드라인: ${hook.headline}
-서브: ${hook.subheadline}
-포인트: ${hook.bodyPoints.join(' | ')}
-CTA: ${hook.callToAction}
-
-구성:
-1장(cover): 강렬한 후킹 제목 + 부제목
-2-5장(content): 핵심 포인트 (각 1개씩)
-6장(stats): 통계/수치 데이터
-7장(cta): CTA + 팔로우 유도
-
-색상: bgColor=#0F172A~#1E293B, textColor=#F8FAFC, accentColor=#818CF8~#6366F1
-
-[{"id":"slide_1","order":1,"type":"cover","title":"제목","body":"본문","bullets":[],"bgColor":"#0F172A","textColor":"#F8FAFC","accentColor":"#818CF8"}]`,
-    { temp: 0.5 }
+    '카루셀디자이너. 한국어. 오타금지. JSON만.',
+    `"${hook.headline}" 카루셀7장. 1cover,2-5content,6stats,7cta. 포인트:${hook.bodyPoints.join('|')} CTA:${hook.callToAction}
+색상:bg=#0F172A,text=#F8FAFC,accent=#818CF8
+[{"id":"slide_1","order":1,"type":"cover","title":"","body":"","bullets":[],"bgColor":"#0F172A","textColor":"#F8FAFC","accentColor":"#818CF8"}]`,
+    { temp: 0.5, max: 1500 }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
 }
 
-// ===== 카루셀 이미지 일괄 생성 =====
+// ===== 카루셀 이미지 일괄 생성 (병렬 3개씩) =====
 export async function generateSlideImages(slides: Record<string, unknown>[]): Promise<string[]> {
   if (!hasGeminiKey()) return slides.map(() => '');
 
-  const results: string[] = [];
-  for (let i = 0; i < slides.length; i++) {
-    const s = slides[i];
-    const prompt = `Create a modern abstract background for a social media slide.
-Theme: dark mode, purple and indigo gradients, minimal geometric shapes.
-Slide topic: ${s.title}
-Style: clean, professional, NO text or words in the image.
-Aspect ratio: 1:1 square.`;
+  const results: string[] = new Array(slides.length).fill('');
+  const batchSize = 3;
 
-    const img = await generateNanoBananaImage(prompt);
-    results.push(img || '');
-
-    // rate limit
-    if (i < slides.length - 1) await new Promise(r => setTimeout(r, 2000));
+  for (let i = 0; i < slides.length; i += batchSize) {
+    const batch = slides.slice(i, i + batchSize);
+    const promises = batch.map((s, j) =>
+      generateNanoBananaImage(
+        `Dark abstract gradient background, purple indigo, minimal, no text. Topic: ${String(s.title).slice(0, 30)}`
+      ).then(img => { results[i + j] = img || ''; })
+    );
+    await Promise.all(promises);
   }
   return results;
 }
@@ -245,24 +218,11 @@ export async function generateLandingHtml(data: {
   ctaText: string; companyName?: string; productName?: string;
 }) {
   const text = await callClaude(
-    `전환율 높은 랜딩 페이지 디자이너. 한국어 UI. 오타 금지. <!DOCTYPE html>로 시작하는 완전한 HTML 반환. 코드 블록(백틱) 없이 HTML만.`,
-    `랜딩 페이지를 만드세요.
-
-제목: ${data.heroTitle}
-부제: ${data.heroSubtitle}
-회사: ${data.companyName || '회사명'} | 제품: ${data.productName || '제품명'}
-CTA: ${data.ctaText}
-기능:
-${data.features.map(f => `- ${f.title}: ${f.description}`).join('\n')}
-
-필수:
-1. <!DOCTYPE html> ~ </html> 완전한 파일
-2. <script src="https://cdn.tailwindcss.com"></script>
-3. Hero → 기능 소개 → CTA → 푸터
-4. 다크 배경(#0F172A), 보라 액센트(#818CF8)
-5. 반응형, CSS 애니메이션
-6. 전부 한국어`,
-    { max: 8192, temp: 0.4 }
+    '랜딩페이지 디자이너. <!DOCTYPE html>완전HTML반환. 백틱없이HTML만.',
+    `제목:${data.heroTitle} 부제:${data.heroSubtitle} 회사:${data.companyName||'회사'} 제품:${data.productName||'제품'} CTA:${data.ctaText}
+기능:${data.features.map(f=>f.description).join(',')}
+Tailwind CDN, 다크(#0F172A), 보라(#818CF8), 반응형, 한국어, Hero→기능→CTA→푸터`,
+    { max: 4096, temp: 0.4 }
   );
 
   const m = text.match(/<!DOCTYPE[\s\S]*/i);
