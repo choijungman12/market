@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { getActiveProvider } from '@/lib/client-api';
 
 const navItems = [
-  { href: '/', label: '트렌드 대시보드', icon: '📊' },
-  { href: '/generate', label: '콘텐츠 생성', icon: '🚀' },
+  { href: '/', label: '트렌드', icon: '📊' },
+  { href: '/generate', label: '생성', icon: '🚀' },
   { href: '/preview', label: '미리보기', icon: '🖼' },
+  { href: '/settings', label: '설정', icon: '⚙' },
 ];
 
 export default function Navbar() {
@@ -15,15 +17,10 @@ export default function Navbar() {
   const [provider, setProvider] = useState<string>('확인 중...');
 
   useEffect(() => {
-    fetch('/api/trends')
-      .then((r) => r.json())
-      .then((d) => {
-        const p = d.meta?.provider;
-        if (p === 'anthropic') setProvider('Claude 연결됨');
-        else if (p === 'genspark') setProvider('GenSpark 연결됨');
-        else setProvider('API 키 필요');
-      })
-      .catch(() => setProvider('오프라인'));
+    const p = getActiveProvider();
+    if (p === 'anthropic') setProvider('Claude 연결됨');
+    else if (p === 'genspark') setProvider('GenSpark 연결됨');
+    else setProvider('설정 필요');
   }, []);
 
   const isConnected = provider.includes('연결됨');

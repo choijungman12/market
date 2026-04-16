@@ -4,24 +4,34 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import TrendCard from '@/components/TrendCard';
-import type { TrendingTopic } from '@/types';
+import { fetchTrends, getActiveProvider } from '@/lib/client-api';
+
+interface Topic {
+  id: string;
+  title: string;
+  source: string;
+  description: string;
+  traffic: string;
+  relatedQueries: string[];
+  category: string;
+  fetchedAt: string;
+}
 
 export default function Dashboard() {
   const router = useRouter();
-  const [topics, setTopics] = useState<TrendingTopic[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'google' | 'reddit'>('all');
+  const [filter, setFilter] = useState<'all' | 'reddit'>('all');
 
   useEffect(() => {
-    fetchTrends();
+    loadTrends();
   }, []);
 
-  async function fetchTrends() {
+  async function loadTrends() {
     setLoading(true);
     try {
-      const res = await fetch('/api/trends');
-      const data = await res.json();
-      setTopics(data.topics || []);
+      const data = await fetchTrends();
+      setTopics(data);
     } catch {
       console.error('Failed to fetch trends');
     } finally {
@@ -29,7 +39,7 @@ export default function Dashboard() {
     }
   }
 
-  function handleSelectTopic(topic: TrendingTopic) {
+  function handleSelectTopic(topic: Topic) {
     sessionStorage.setItem('selectedTopic', JSON.stringify(topic));
     router.push('/generate');
   }
@@ -37,41 +47,56 @@ export default function Dashboard() {
   const filteredTopics =
     filter === 'all' ? topics : topics.filter((t) => t.source === filter);
 
+  const provider = typeof window !== 'undefined' ? getActiveProvider() : 'none';
+
   return (
     <>
       <Navbar />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        {/* 헤더 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">
             <span className="gradient-text">실시간 글로벌 트렌드</span>
           </h1>
           <p className="text-foreground/50">
-            클릭률이 가장 높은 해외 이슈를 발견하고, AI가 후킹 콘텐츠를
-            자동으로 만들어 드립니다.
+            클릭률이 가장 높은 해외 이슈를 발견하고, AI가 후킹 콘텐츠를 자동으로 만들어 드립니다.
           </p>
         </div>
+
+        {/* API 미설정 안내 */}
+        {provider === 'none' && (
+          <div className="mb-6 p-4 rounded-xl bg-warning/10 border border-warning/30 flex items-center justify-between">
+            <div className="text-sm">
+              <span className="font-bold text-warning">API 키가 필요합니다</span>
+              <span className="text-foreground/50 ml-2">트렌드는 바로 볼 수 있지만, 콘텐츠 생성에는 API 키가 필요합니다.</span>
+            </div>
+            <button
+              onClick={() => router.push('/settings')}
+              className="px-4 py-1.5 rounded-lg bg-warning/20 text-warning text-xs font-medium hover:bg-warning/30 transition-colors shrink-0 ml-4"
+            >
+              설정하기
+            </button>
+          </div>
+        )}
 
         {/* 필터 + 새로고침 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            {(['all', 'google', 'reddit'] as const).map((f) => (
+            {(['all', 'reddit'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   filter === f
                     ? 'bg-accent/15 text-accent border border-accent/30'
-                    : 'bg-card-bg text-foreground/50 border border-card-border hover:border-card-border/80'
+                    : 'bg-card-bg text-foreground/50 border border-card-border'
                 }`}
               >
-                {f === 'all' ? '전체' : f === 'google' ? 'Google' : 'Reddit'}
+                {f === 'all' ? '전체' : 'Reddit'}
               </button>
             ))}
           </div>
-
           <button
-            onClick={fetchTrends}
+            onClick={loadTrends}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card-bg border border-card-border text-sm text-foreground/60 hover:text-accent hover:border-accent/30 transition-all disabled:opacity-50"
           >
@@ -80,35 +105,25 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* 통계 바 */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          {[
-            { label: '발견된 트렌드', value: topics.length, color: 'text-accent' },
-            { label: 'Google 트렌드', value: topics.filter((t) => t.source === 'google').length, color: 'text-blue-400' },
-            { label: 'Reddit 인기', value: topics.filter((t) => t.source === 'reddit').length, color: 'text-orange-400' },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="p-4 rounded-xl bg-card-bg border border-card-border text-center"
-            >
-              <div className={`text-2xl font-bold ${stat.color}`}>
-                {stat.value}
-              </div>
-              <div className="text-xs text-foreground/40 mt-1">
-                {stat.label}
-              </div>
+        {/* 통계 */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="p-4 rounded-xl bg-card-bg border border-card-border text-center">
+            <div className="text-2xl font-bold text-accent">{topics.length}</div>
+            <div className="text-xs text-foreground/40 mt-1">발견된 트렌드</div>
+          </div>
+          <div className="p-4 rounded-xl bg-card-bg border border-card-border text-center">
+            <div className="text-2xl font-bold text-orange-400">
+              {topics.filter((t) => t.source === 'reddit').length}
             </div>
-          ))}
+            <div className="text-xs text-foreground/40 mt-1">Reddit 인기</div>
+          </div>
         </div>
 
-        {/* 트렌드 그리드 */}
+        {/* 그리드 */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-48 rounded-xl bg-card-bg border border-card-border animate-pulse"
-              />
+              <div key={i} className="h-48 rounded-xl bg-card-bg border border-card-border animate-pulse" />
             ))}
           </div>
         ) : filteredTopics.length === 0 ? (
@@ -119,12 +134,7 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredTopics.map((topic, i) => (
-              <TrendCard
-                key={topic.id}
-                topic={topic}
-                onSelect={handleSelectTopic}
-                index={i}
-              />
+              <TrendCard key={topic.id} topic={topic as never} onSelect={handleSelectTopic as never} index={i} />
             ))}
           </div>
         )}
