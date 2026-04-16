@@ -26,6 +26,7 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [productName, setProductName] = useState('');
+  const [platform, setPlatform] = useState<'instagram' | 'tiktok' | 'facebook'>('instagram');
 
   useEffect(() => {
     const s = sessionStorage.getItem('selectedTopic');
@@ -57,8 +58,8 @@ export default function GeneratePage() {
 
       let images: string[] = [];
       if (hasGeminiKey()) {
-        setLoadingMsg('NanoBanana로 배경 이미지 생성 중... (7장)');
-        images = await generateSlideImages(slides as Record<string, unknown>[]);
+        setLoadingMsg(`NanoBanana로 ${platform} 이미지 생성 중... (${slides.length}장)`);
+        images = await generateSlideImages(slides as Record<string, unknown>[], platform);
       }
 
       setCarousel({
@@ -140,6 +141,24 @@ export default function GeneratePage() {
                         className={`p-4 rounded-lg border text-left transition-all ${tone === t.key ? 'border-accent bg-accent/10' : 'border-card-border hover:border-accent/30'}`}>
                         <div className="font-medium text-sm">{t.label}</div>
                         <div className="text-xs text-foreground/40 mt-1">{t.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* SNS 플랫폼 선택 */}
+                <div className="p-6 rounded-xl bg-card-bg border border-card-border">
+                  <h3 className="text-sm font-bold mb-3 text-foreground/70">SNS 플랫폼</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {([
+                      { key: 'instagram' as const, label: 'Instagram', desc: '1080x1080', icon: '📸' },
+                      { key: 'tiktok' as const, label: 'TikTok', desc: '1080x1920', icon: '🎵' },
+                      { key: 'facebook' as const, label: 'Facebook', desc: '1200x628', icon: '📘' },
+                    ]).map(p => (
+                      <button key={p.key} onClick={() => setPlatform(p.key)}
+                        className={`p-4 rounded-lg border text-left transition-all ${platform === p.key ? 'border-accent bg-accent/10' : 'border-card-border hover:border-accent/30'}`}>
+                        <div className="font-medium text-sm">{p.icon} {p.label}</div>
+                        <div className="text-xs text-foreground/40 mt-1">{p.desc}</div>
                       </button>
                     ))}
                   </div>

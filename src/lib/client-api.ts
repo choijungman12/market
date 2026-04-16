@@ -113,6 +113,9 @@ export const CATEGORIES = [
   { key: '셀럽', label: '연예인/셀럽', emoji: '⭐' },
   { key: '테크', label: 'IT/테크', emoji: '💻' },
   { key: '재테크', label: '재테크/부업', emoji: '💰' },
+  { key: '시즌', label: '시즌/이벤트', emoji: '📅' },
+  { key: '글로벌', label: '글로벌/나라별', emoji: '🌍' },
+  { key: '지혜', label: '지혜/철학/종교', emoji: '🕊' },
 ] as const;
 
 export type CategoryKey = typeof CATEGORIES[number]['key'];
@@ -153,31 +156,37 @@ export async function fetchTrends(forceRefresh = false): Promise<TrendItem[]> {
   if (getActiveProvider() === 'none') return getDefaultTrends();
 
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+    const month = new Date().getMonth() + 1;
+    const seasonInfo = month >= 3 && month <= 5 ? '봄 시즌 (벚꽃, 나들이, 봄맞이)' :
+      month >= 6 && month <= 8 ? '여름 시즌 (휴가, 수영복, 다이어트)' :
+      month >= 9 && month <= 11 ? '가을 시즌 (단풍, 패션, 추석)' : '겨울 시즌 (크리스마스, 연말, 방한)';
+
     const text = await callClaude(
-      '한국 SNS 트렌드 분석 전문가. 한국어. JSON만 반환.',
-      `오늘(${today}) 한국과 글로벌에서 SNS 조회수/트래픽이 가장 높은 바이럴 토픽을 카테고리별로 조사해주세요.
+      '2026년 최신 한국/글로벌 SNS 트렌드 분석가. 한국어. 오타금지. JSON만.',
+      `오늘은 ${today}입니다. 현재 시즌: ${seasonInfo}.
 
-카테고리별 각 3개씩, 총 30개 이상:
-- 음식: 맛집, 레시피, 먹방 트렌드
-- 다이어트: 운동, 체중관리, 피트니스
+2026년 4월 현재 SNS에서 가장 바이럴한 최신 토픽을 카테고리별 각 2-3개씩 총 35개 이상 생성하세요.
+
+중요: 반드시 2026년 최신 트렌드만. 오래된 자료 절대 불가.
+
+카테고리:
+- 음식: 맛집, 레시피, 먹방 (2026 최신)
+- 다이어트: 운동, 피트니스 (올해 유행)
 - 건강: 건강관리, 의약, 웰니스
-- 식단: 영양, 건강식, 밀프렙
-- 쇼핑: 쇼핑트렌드, 핫딜, 신상품
-- 화장품: 뷰티, 스킨케어, 메이크업
-- 의류: 패션, OOTD, 시즌트렌드
-- 인플루언서: SNS 인플루언서, 크리에이터
-- 셀럽: 연예인, K-POP, 드라마
-- 테크: IT, AI, 가젯
-- 재테크: 부업, 투자, 수익화
+- 식단: 영양, 밀프렙, 건강식
+- 쇼핑: 핫딜, 신상품, 트렌드
+- 화장품: 뷰티, 스킨케어, 2026 SS
+- 의류: 패션, OOTD, ${seasonInfo}
+- 인플루언서: SNS 크리에이터 이슈
+- 셀럽: K-POP, 드라마, 연예인
+- 테크: AI, 가젯, 신기술
+- 재테크: 부업, 투자, AI 수익화
+- 시즌: ${seasonInfo}, 다가오는 공휴일/이벤트 (어린이날, 어버이날, 석가탄신일 등)
+- 글로벌: 미국/일본/유럽 트렌드, 해외 바이럴
+- 지혜: 철학적 명언, 종교적 가르침, 인생 지혜, 마음 수양, 명상
 
-각 항목에 포함:
-- title: 후킹되는 한국어 제목 (20자 이내)
-- description: 왜 지금 핫한지 2문장 설명
-- traffic: 추정 검색량 (예: 500K+)
-- views: 추정 SNS 조회수 (예: 2M views)
-- category: 위 카테고리명 중 하나
-- relatedQueries: 관련 키워드 2개
+각 항목: title(20자이내), description(2문장), traffic(검색량), views(SNS조회수), category(위 카테고리명), relatedQueries([키워드2개])
 
 [{"title":"","description":"","traffic":"","views":"","category":"","relatedQueries":[""]}]`,
       { temp: 0.9, max: 4096 }
@@ -221,6 +230,9 @@ function getDefaultTrends(): TrendItem[] {
     { id: 'd10', title: 'AI로 월 500만원 부업', source: 'AI', description: 'ChatGPT와 AI 도구로 부업하는 실제 사례 모음. 초보자도 따라할 수 있는 가이드.', traffic: '1M+', views: '7M views', relatedQueries: ['AI부업', '자동수익'], category: '재테크', fetchedAt: new Date().toISOString() },
     { id: 'd11', title: 'Apple Vision Pro 2 출시', source: 'AI', description: 'Apple Vision Pro 2세대 공개. 가격 절반에 성능 2배. 국내 출시일 확정.', traffic: '800K+', views: '4M views', relatedQueries: ['비전프로', '애플신제품'], category: '테크', fetchedAt: new Date().toISOString() },
     { id: 'd12', title: '아이브 월드투어 티켓팅 전쟁', source: 'AI', description: '아이브 첫 월드투어 티켓 오픈과 동시에 전석 매진. 리셀 가격 10배 치솟아.', traffic: '3M+', views: '20M views', relatedQueries: ['아이브', '콘서트티켓'], category: '셀럽', fetchedAt: new Date().toISOString() },
+    { id: 'd13', title: '5월 어버이날 감동 선물 TOP 10', source: 'AI', description: '2026년 어버이날 선물 트렌드. 건강식품부터 체험형 선물까지 가성비 랭킹.', traffic: '600K+', views: '3M views', relatedQueries: ['어버이날', '효도선물'], category: '시즌', fetchedAt: new Date().toISOString() },
+    { id: 'd14', title: '일본 벚꽃 명소 2026 업데이트', source: 'AI', description: '2026년 일본 벚꽃 개화 시기 확정. 새로운 숨은 명소와 가성비 여행 루트 공개.', traffic: '400K+', views: '2M views', relatedQueries: ['일본여행', '벚꽃명소'], category: '글로벌', fetchedAt: new Date().toISOString() },
+    { id: 'd15', title: '마음이 힘들 때 읽는 법구경', source: 'AI', description: '불교 경전 법구경 속 지혜의 말씀. 현대인의 번아웃을 치유하는 2600년 된 처방전.', traffic: '200K+', views: '1.5M views', relatedQueries: ['명상', '마음치유'], category: '지혜', fetchedAt: new Date().toISOString() },
   ];
 }
 
@@ -255,21 +267,46 @@ export async function generateCarouselSlides(hook: {
   return Array.isArray(p) ? p : [p];
 }
 
-// ===== 카루셀 이미지 일괄 생성 (병렬 3개씩) =====
-export async function generateSlideImages(slides: Record<string, unknown>[]): Promise<string[]> {
+// ===== 카루셀 이미지 일괄 생성 (대본 내용 기반) =====
+export async function generateSlideImages(
+  slides: Record<string, unknown>[],
+  platform: 'instagram' | 'tiktok' | 'facebook' = 'instagram'
+): Promise<string[]> {
   if (!hasGeminiKey()) return slides.map(() => '');
 
-  const results: string[] = new Array(slides.length).fill('');
-  const batchSize = 3;
+  const sizeGuide: Record<string, string> = {
+    instagram: '1080x1080 square',
+    tiktok: '1080x1920 vertical 9:16',
+    facebook: '1200x628 horizontal',
+  };
 
-  for (let i = 0; i < slides.length; i += batchSize) {
-    const batch = slides.slice(i, i + batchSize);
-    const promises = batch.map((s, j) =>
-      generateNanoBananaImage(
-        `Dark abstract gradient background, purple indigo, minimal, no text. Topic: ${String(s.title).slice(0, 30)}`
-      ).then(img => { results[i + j] = img || ''; })
-    );
+  const results: string[] = new Array(slides.length).fill('');
+
+  // 2개씩 병렬 (rate limit)
+  for (let i = 0; i < slides.length; i += 2) {
+    const batch = slides.slice(i, i + 2);
+    const promises = batch.map((s, j) => {
+      const title = String(s.title || '');
+      const body = String(s.body || '');
+      const type = String(s.type || 'content');
+      const isFirst = (i + j) === 0;
+
+      const prompt = `Create a professional SNS marketing image for Korean audience.
+Content: "${title}" - ${body}
+Style: ${isFirst ? 'BOLD attention-grabbing cover with large Korean text' : 'clean informative slide'}.
+Include Korean text "${title}" as overlay on the image.
+Colors: dark background (#0F172A to #1E293B), purple/indigo accents (#818CF8).
+Format: ${sizeGuide[platform]}.
+Type: ${type === 'cover' ? 'Eye-catching hook cover' : type === 'cta' ? 'Call-to-action with button feel' : 'Content slide'}.
+Make it look like a real Instagram carousel post from a Korean marketing expert.`;
+
+      return generateNanoBananaImage(prompt)
+        .then(img => { results[i + j] = img || ''; })
+        .catch(() => { results[i + j] = ''; });
+    });
+
     await Promise.all(promises);
+    if (i + 2 < slides.length) await new Promise(r => setTimeout(r, 3000));
   }
   return results;
 }

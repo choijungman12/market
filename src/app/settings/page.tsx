@@ -36,7 +36,7 @@ export default function SettingsPage() {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514', max_tokens: 30,
+          model: 'claude-haiku-4-5-20251001', max_tokens: 30,
           messages: [{ role: 'user', content: '"연결 성공"이라고만 답해주세요.' }],
         }),
       });
@@ -53,19 +53,44 @@ export default function SettingsPage() {
 
   async function testNanoBanana() {
     setTesting(true); setTestResult(null); setTestImg(null);
+    const key = geminiKey.trim();
+    if (!key) { setTestResult('Gemini API 키를 입력해주세요.'); setTesting(false); return; }
+
     try {
-      setApiKey('gemini', geminiKey.trim());
-      const img = await generateNanoBananaImage(
-        'A beautiful minimal abstract gradient background, dark purple and indigo, no text, square format'
+      setApiKey('gemini', key);
+      setTestResult('NanoBanana 이미지 생성 중... (10~20초 소요)');
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Dark purple gradient abstract background, minimal geometric shapes, no text, professional, square format' }] }],
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+          }),
+        }
       );
-      if (img) {
-        setTestImg(img);
-        setTestResult('NanoBanana 이미지 생성 성공!');
-      } else {
-        setTestResult('NanoBanana 이미지 생성 실패. 키를 확인하세요.');
+
+      if (!res.ok) {
+        const err = await res.text();
+        setTestResult(`Gemini API 오류 (${res.status}): ${err.slice(0, 150)}`);
+        return;
       }
+
+      const data = await res.json();
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData) {
+          const imgUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          setTestImg(imgUrl);
+          setTestResult(`NanoBanana 성공! (${Math.round(part.inlineData.data.length / 1024)}KB)`);
+          return;
+        }
+      }
+      setTestResult('응답에 이미지가 없습니다. 다시 시도해주세요.');
     } catch (e) {
-      setTestResult(`오류: ${e instanceof Error ? e.message : String(e)}`);
+      setTestResult(`네트워크 오류: ${e instanceof Error ? e.message : String(e)}`);
     } finally { setTesting(false); }
   }
 
