@@ -281,38 +281,44 @@ CTA: ${hook.callToAction}
   return Array.isArray(p) ? p : [p];
 }
 
-// ===== 카루셀 이미지 일괄 생성 (대본 내용 기반) =====
+// ===== SNS 이미지 일괄 생성 (대본 내용 기반 사실적 이미지) =====
 export async function generateSlideImages(
   slides: Record<string, unknown>[],
   platform: 'instagram' | 'tiktok' | 'facebook' = 'instagram'
 ): Promise<string[]> {
   if (!hasGeminiKey()) return slides.map(() => '');
 
-  const sizeGuide: Record<string, string> = {
-    instagram: '1080x1080 square',
-    tiktok: '1080x1920 vertical 9:16',
-    facebook: '1200x628 horizontal',
+  const ratio: Record<string, string> = {
+    instagram: '1:1 square',
+    tiktok: '9:16 vertical',
+    facebook: '16:9 horizontal',
   };
 
   const results: string[] = new Array(slides.length).fill('');
 
-  // 2개씩 병렬 (rate limit)
   for (let i = 0; i < slides.length; i += 2) {
     const batch = slides.slice(i, i + 2);
     const promises = batch.map((s, j) => {
       const title = String(s.title || '');
       const body = String(s.body || '');
-      const type = String(s.type || 'content');
       const isFirst = (i + j) === 0;
 
-      const prompt = `Create a professional SNS marketing image for Korean audience.
-Content: "${title}" - ${body}
-Style: ${isFirst ? 'BOLD attention-grabbing cover with large Korean text' : 'clean informative slide'}.
-Include Korean text "${title}" as overlay on the image.
-Colors: dark background (#0F172A to #1E293B), purple/indigo accents (#818CF8).
-Format: ${sizeGuide[platform]}.
-Type: ${type === 'cover' ? 'Eye-catching hook cover' : type === 'cta' ? 'Call-to-action with button feel' : 'Content slide'}.
-Make it look like a real Instagram carousel post from a Korean marketing expert.`;
+      const prompt = `Photorealistic image for SNS post.
+
+Scene: ${body}
+${isFirst
+  ? `This is the MAIN HOOK image. Must be extremely eye-catching and dramatic. Show a real scene that makes people stop scrolling.`
+  : `Show a realistic scene that visually represents: "${title}"`
+}
+
+Requirements:
+- Photorealistic, high quality, like a real photograph
+- Real people, real objects, real environments (NOT abstract, NOT gradient backgrounds)
+- The image must directly match the content topic
+- Vibrant colors, professional lighting, cinematic feel
+- ${ratio[platform]} aspect ratio
+- NO text overlay, NO words, NO letters on the image (text will be added separately)
+- Style: editorial photography, magazine quality`;
 
       return generateNanoBananaImage(prompt)
         .then(img => { results[i + j] = img || ''; })
