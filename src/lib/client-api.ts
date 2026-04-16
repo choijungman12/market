@@ -116,6 +116,7 @@ export const CATEGORIES = [
   { key: '시즌', label: '시즌/이벤트', emoji: '📅' },
   { key: '글로벌', label: '글로벌/나라별', emoji: '🌍' },
   { key: '지혜', label: '지혜/철학/종교', emoji: '🕊' },
+  { key: '연애', label: '연애/관계/성', emoji: '💕' },
 ] as const;
 
 export type CategoryKey = typeof CATEGORIES[number]['key'];
@@ -185,6 +186,7 @@ export async function fetchTrends(forceRefresh = false): Promise<TrendItem[]> {
 - 시즌: ${seasonInfo}, 다가오는 공휴일/이벤트 (어린이날, 어버이날, 석가탄신일 등)
 - 글로벌: 미국/일본/유럽 트렌드, 해외 바이럴
 - 지혜: 철학적 명언, 종교적 가르침, 인생 지혜, 마음 수양, 명상
+- 연애: 남녀 연애 트렌드, 관계 심리, 데이트 문화, 성 관련 이슈, 글로벌 연애 뉴스, 커플 핫이슈
 
 각 항목: title(20자이내), description(2문장), traffic(검색량), views(SNS조회수), category(위 카테고리명), relatedQueries([키워드2개])
 
@@ -233,6 +235,8 @@ function getDefaultTrends(): TrendItem[] {
     { id: 'd13', title: '5월 어버이날 감동 선물 TOP 10', source: 'AI', description: '2026년 어버이날 선물 트렌드. 건강식품부터 체험형 선물까지 가성비 랭킹.', traffic: '600K+', views: '3M views', relatedQueries: ['어버이날', '효도선물'], category: '시즌', fetchedAt: new Date().toISOString() },
     { id: 'd14', title: '일본 벚꽃 명소 2026 업데이트', source: 'AI', description: '2026년 일본 벚꽃 개화 시기 확정. 새로운 숨은 명소와 가성비 여행 루트 공개.', traffic: '400K+', views: '2M views', relatedQueries: ['일본여행', '벚꽃명소'], category: '글로벌', fetchedAt: new Date().toISOString() },
     { id: 'd15', title: '마음이 힘들 때 읽는 법구경', source: 'AI', description: '불교 경전 법구경 속 지혜의 말씀. 현대인의 번아웃을 치유하는 2600년 된 처방전.', traffic: '200K+', views: '1.5M views', relatedQueries: ['명상', '마음치유'], category: '지혜', fetchedAt: new Date().toISOString() },
+    { id: 'd16', title: '2026 연애 트렌드 대반전', source: 'AI', description: 'Z세대의 새로운 연애 문화 "슬로우 데이팅"이 전 세계적 트렌드. 빠른 만남보다 천천히 알아가는 관계 선호.', traffic: '700K+', views: '8M views', relatedQueries: ['슬로우데이팅', '연애트렌드'], category: '연애', fetchedAt: new Date().toISOString() },
+    { id: 'd17', title: '커플 심리테스트 1억뷰 돌파', source: 'AI', description: '틱톡에서 유행하는 커플 궁합 심리테스트가 1억 뷰 돌파. 연인 관계 진단 콘텐츠 폭발.', traffic: '500K+', views: '100M views', relatedQueries: ['커플테스트', '연애심리'], category: '연애', fetchedAt: new Date().toISOString() },
   ];
 }
 
