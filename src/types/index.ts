@@ -36,12 +36,15 @@ export interface CarouselSlide {
   accentColor: string;
 }
 
+// AI에서 반환되는 슬라이드는 동적 필드가 있을 수 있음
+export type DynamicSlide = Record<string, unknown>;
+
 export interface CarouselSet {
   id: string;
   hookContentId: string;
-  slides: CarouselSlide[];
+  slides: DynamicSlide[];
   format: 'instagram' | 'facebook';
-  generatedImages: string[]; // base64 PNG or NanoBanana URLs
+  generatedImages: string[];
 }
 
 // ===== 랜딩 페이지 =====
@@ -49,8 +52,7 @@ export interface LandingPageData {
   hookContentId: string;
   heroTitle: string;
   heroSubtitle: string;
-  features: { icon: string; title: string; description: string }[];
-  testimonial?: { quote: string; author: string };
+  features: { title: string; description: string }[];
   ctaText: string;
   ctaUrl: string;
   companyName?: string;
@@ -58,27 +60,5 @@ export interface LandingPageData {
   generatedHtml?: string;
 }
 
-// ===== NanoBanana 이미지 생성 =====
-export interface NanoBananaRequest {
-  prompt: string;
-  width: number;
-  height: number;
-  style?: string;
-  negativePrompt?: string;
-}
-
-export interface NanoBananaResponse {
-  imageUrl: string;
-  imageBase64?: string;
-}
-
 // ===== 워크플로우 상태 =====
 export type WorkflowStep = 'topic' | 'hooks' | 'carousel' | 'landing';
-
-export interface WorkflowState {
-  currentStep: WorkflowStep;
-  selectedTopic: TrendingTopic | null;
-  selectedHook: HookContent | null;
-  carouselSet: CarouselSet | null;
-  landingPage: LandingPageData | null;
-}
