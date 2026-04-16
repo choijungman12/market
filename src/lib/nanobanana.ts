@@ -1,61 +1,97 @@
-// NanoBanana 이미지 생성 = Gemini API 연동
-// 실제 API: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
+// NanoBanana 이미지 생성 통합 모듈
+// 우선순위: GenSpark 내장 NanoBanana → Gemini API 직접 → 플레이스홀더
+
+import { isGenSparkAvailable, generateCarouselImagesViaGenSpark, generateImageViaGenSpark } from './genspark';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-exp';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export interface ImageResult {
-  base64: string; // data:image/png;base64,...
+  base64: string;
   mimeType: string;
 }
 
-// ===== Gemini 이미지 생성 (실제 API) =====
-export async function generateImage(
-  prompt: string,
-  aspectRatio: string = '1:1'
-): Promise<ImageResult | null> {
-  if (!GEMINI_API_KEY) {
-    console.warn('[NanoBanana] GEMINI_API_KEY 미설정 - 플레이스홀더 사용');
-    return generatePlaceholder(prompt);
+// ===== 단일 이미지 생성 =====
+export async function generateImage(prompt: string): Promise<ImageResult | null> {
+  // 1) GenSpark NanoBanana 시도
+  if (isGenSparkAvailable()) {
+    const result = await generateImageViaGenSpark(prompt);
+    if (result) {
+      return {
+        base64: result,
+        mimeType: result.startsWith('data:') ? 'image/png' : 'url',
+      };
+    }
   }
 
+  // 2) Gemini API 직접 시도
+  if (GEMINI_API_KEY) {
+    return generateViaGemini(prompt);
+  }
+
+  // 3) 플레이스홀더
+  return generatePlaceholder(prompt);
+}
+
+// ===== 카루셀 이미지 일괄 생성 =====
+export async function generateCarouselImages(
+  prompts: string[]
+): Promise<(ImageResult | null)[]> {
+  // 1) GenSpark NanoBanana 일괄 시도
+  if (isGenSparkAvailable()) {
+    const results = await generateCarouselImagesViaGenSpark(prompts);
+    return results.map((r) =>
+      r
+        ? { base64: r, mimeType: r.startsWith('data:') ? 'image/png' : 'url' }
+        : generatePlaceholder(prompts[0] || 'background')
+    );
+  }
+
+  // 2) Gemini API 일괄 시도
+  if (GEMINI_API_KEY) {
+    const results: (ImageResult | null)[] = [];
+    for (let i = 0; i < prompts.length; i += 2) {
+      const batch = prompts.slice(i, i + 2);
+      const batchResults = await Promise.all(batch.map((p) => generateViaGemini(p)));
+      results.push(...batchResults);
+      if (i + 2 < prompts.length) await new Promise((r) => setTimeout(r, 1000));
+    }
+    return results;
+  }
+
+  // 3) 전부 플레이스홀더
+  return prompts.map((p) => generatePlaceholder(p));
+}
+
+// ===== Gemini API 직접 호출 =====
+async function generateViaGemini(prompt: string): Promise<ImageResult | null> {
   try {
     const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `Generate a modern, clean social media graphic background image.
-Style: minimal abstract, dark theme with purple/indigo accent gradients.
-NO text, NO words, NO letters in the image.
-Prompt: ${prompt}`,
-              },
-            ],
-          },
-        ],
+        contents: [{
+          parts: [{
+            text: `Generate a modern, clean social media graphic background.
+Dark theme with purple/indigo gradients. NO text or words.
+${prompt}`,
+          }],
+        }],
         generationConfig: {
           responseModalities: ['IMAGE', 'TEXT'],
-          imageParts: { imageFormat: 'png' },
         },
       }),
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[NanoBanana] Gemini API ${res.status}:`, errText);
+      console.warn(`[NanoBanana] Gemini ${res.status}`);
       return generatePlaceholder(prompt);
     }
 
     const data = await res.json();
-    const parts = data?.candidates?.[0]?.content?.parts || [];
-
-    for (const part of parts) {
+    for (const part of data?.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         return {
           base64: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`,
@@ -63,51 +99,21 @@ Prompt: ${prompt}`,
         };
       }
     }
-
-    console.warn('[NanoBanana] 응답에 이미지 없음');
     return generatePlaceholder(prompt);
   } catch (error) {
-    console.error('[NanoBanana] API 오류:', error);
+    console.warn('[NanoBanana] Gemini error:', error);
     return generatePlaceholder(prompt);
   }
 }
 
-// ===== 카루셀 배경 이미지 일괄 생성 =====
-export async function generateCarouselImages(
-  prompts: string[]
-): Promise<(ImageResult | null)[]> {
-  // 병렬로 생성하되 rate limit 고려하여 2개씩
-  const results: (ImageResult | null)[] = [];
-  const batchSize = 2;
-
-  for (let i = 0; i < prompts.length; i += batchSize) {
-    const batch = prompts.slice(i, i + batchSize);
-    const batchResults = await Promise.all(
-      batch.map((p) => generateImage(p, '1:1'))
-    );
-    results.push(...batchResults);
-
-    // rate limit 대기 (batch 사이)
-    if (i + batchSize < prompts.length) {
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-
-  return results;
-}
-
-// ===== SVG 플레이스홀더 (API 키 없을 때) =====
+// ===== SVG 플레이스홀더 =====
 function generatePlaceholder(prompt: string): ImageResult {
   const hash = Array.from(prompt).reduce((a, c) => a + c.charCodeAt(0), 0);
-  const gradients = [
-    ['#6366F1', '#8B5CF6'],
-    ['#818CF8', '#A78BFA'],
-    ['#4F46E5', '#7C3AED'],
-    ['#6366F1', '#EC4899'],
-    ['#3B82F6', '#8B5CF6'],
-    ['#7C3AED', '#2DD4BF'],
+  const colors = [
+    ['#6366F1', '#8B5CF6'], ['#818CF8', '#A78BFA'], ['#4F46E5', '#7C3AED'],
+    ['#6366F1', '#EC4899'], ['#3B82F6', '#8B5CF6'], ['#7C3AED', '#2DD4BF'],
   ];
-  const [c1, c2] = gradients[hash % gradients.length];
+  const [c1, c2] = colors[hash % colors.length];
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
     <defs>
@@ -128,13 +134,10 @@ function generatePlaceholder(prompt: string): ImageResult {
     <rect width="1080" height="1080" fill="url(#bg)"/>
     <circle cx="270" cy="270" r="400" fill="url(#g1)"/>
     <circle cx="810" cy="810" r="350" fill="url(#g2)"/>
-    <circle cx="540" cy="400" r="150" fill="${c1}" opacity="0.08"/>
-    <circle cx="350" cy="700" r="200" fill="${c2}" opacity="0.06"/>
   </svg>`;
 
-  const base64 = Buffer.from(svg).toString('base64');
   return {
-    base64: `data:image/svg+xml;base64,${base64}`,
+    base64: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
     mimeType: 'image/svg+xml',
   };
 }
