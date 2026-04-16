@@ -43,7 +43,7 @@ export interface CarouselSet {
   id: string;
   hookContentId: string;
   slides: DynamicSlide[];
-  format: 'instagram' | 'facebook';
+  format: 'instagram' | 'tiktok' | 'facebook';
   generatedImages: string[];
 }
 

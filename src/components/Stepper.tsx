@@ -4,8 +4,8 @@ import type { WorkflowStep } from '@/types';
 
 const steps: { key: WorkflowStep; label: string; icon: string }[] = [
   { key: 'topic', label: '토픽 선택', icon: '1' },
-  { key: 'hooks', label: '후킹 생성', icon: '2' },
-  { key: 'carousel', label: '카루셀 제작', icon: '3' },
+  { key: 'hooks', label: '대본 생성', icon: '2' },
+  { key: 'carousel', label: 'SNS 이미지', icon: '3' },
   { key: 'landing', label: '랜딩 페이지', icon: '4' },
 ];
 

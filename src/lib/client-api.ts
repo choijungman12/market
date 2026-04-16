@@ -252,16 +252,26 @@ export async function generateHooks(
   return Array.isArray(p) ? p : [p];
 }
 
-// ===== 카루셀 슬라이드 생성 =====
+// ===== SNS 이미지 대본 생성 =====
 export async function generateCarouselSlides(hook: {
   headline: string; subheadline: string; bodyPoints: string[]; callToAction: string;
-}) {
+}, count: number = 8) {
   const text = await callClaude(
-    '카루셀디자이너. 한국어. 오타금지. JSON만.',
-    `"${hook.headline}" 카루셀7장. 1cover,2-5content,6stats,7cta. 포인트:${hook.bodyPoints.join('|')} CTA:${hook.callToAction}
-색상:bg=#0F172A,text=#F8FAFC,accent=#818CF8
-[{"id":"slide_1","order":1,"type":"cover","title":"","body":"","bullets":[],"bgColor":"#0F172A","textColor":"#F8FAFC","accentColor":"#818CF8"}]`,
-    { temp: 0.5, max: 1500 }
+    'SNS 콘텐츠 디자이너. 한국어. 오타 금지. JSON만 반환.',
+    `"${hook.headline}" 주제로 SNS 이미지 대본 ${count}장을 구성하세요.
+
+규칙:
+- 1장(메인): 가장 어그로/후킹되는 제목. 사람들이 멈추고 볼 수밖에 없는 문구
+- 2~${count-1}장: 핵심 내용 전달. 각 장마다 임팩트 있는 한줄 제목 + 설명
+- ${count}장(마지막): CTA + 팔로우/저장 유도
+
+핵심 포인트: ${hook.bodyPoints.join(' | ')}
+CTA: ${hook.callToAction}
+
+색상: bg=#0F172A~#1E293B, text=#F8FAFC, accent=#818CF8
+
+[{"id":"slide_1","order":1,"type":"cover","title":"어그로 제목","body":"본문","bullets":[],"bgColor":"#0F172A","textColor":"#F8FAFC","accentColor":"#818CF8"}]`,
+    { temp: 0.6, max: 2048 }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
