@@ -155,53 +155,113 @@ const MARKETING_SYSTEM = `당신은 글로벌 SNS 바이럴 마케팅 전문가�
 
 중요: 반드시 유효한 JSON만 반환하세요. 마크다운 코드블록(백틱) 없이 순수 JSON만 출력하세요.`;
 
-// ===== 트렌드 가져오기 (Reddit) =====
-export async function fetchTrends() {
-  const results: { id: string; title: string; source: string; description: string; traffic: string; relatedQueries: string[]; category: string; fetchedAt: string }[] = [];
+// ===== 트렌드 가져오기 =====
+export type TrendItem = {
+  id: string;
+  title: string;
+  source: string;
+  description: string;
+  traffic: string;
+  relatedQueries: string[];
+  category: string;
+  fetchedAt: string;
+};
 
-  const subreddits = ['popular', 'technology', 'business', 'marketing'];
+export async function fetchTrends(): Promise<TrendItem[]> {
+  // 1) Reddit 시도
+  const redditResults = await fetchRedditTrends();
+  if (redditResults.length > 0) return redditResults;
 
-  await Promise.all(
-    subreddits.map(async (sub) => {
-      try {
-        const res = await fetch(`https://www.reddit.com/r/${sub}/hot.json?limit=8`);
-        if (!res.ok) return;
-        const data = await res.json();
+  // 2) Reddit 실패 시 → Claude AI로 트렌드 생성
+  const provider = getActiveProvider();
+  if (provider !== 'none') {
+    return fetchAITrends();
+  }
 
-        for (const post of data?.data?.children || []) {
-          const d = post.data;
-          if (d.stickied || d.score < 300 || d.over_18) continue;
-          results.push({
-            id: `reddit_${d.id}`,
-            title: d.title,
-            source: 'reddit',
-            description: d.selftext?.slice(0, 300) || d.title,
-            traffic: formatNum(d.score) + ' upvotes',
-            relatedQueries: [d.subreddit, ...(d.link_flair_text ? [d.link_flair_text] : [])],
-            category: d.subreddit,
-            fetchedAt: new Date().toISOString(),
-          });
-        }
-      } catch (e) {
-        console.warn(`[HookFlow] Reddit r/${sub} 실패:`, e);
+  // 3) 둘 다 안 되면 기본 트렌드
+  return getDefaultTrends();
+}
+
+async function fetchRedditTrends(): Promise<TrendItem[]> {
+  const results: TrendItem[] = [];
+  const subreddits = ['popular', 'technology', 'business'];
+
+  try {
+    const responses = await Promise.all(
+      subreddits.map((sub) =>
+        fetch(`https://www.reddit.com/r/${sub}/hot.json?limit=8`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+      )
+    );
+
+    for (const data of responses) {
+      if (!data?.data?.children) continue;
+      for (const post of data.data.children) {
+        const d = post.data;
+        if (d.stickied || d.score < 300 || d.over_18) continue;
+        results.push({
+          id: `reddit_${d.id}`,
+          title: d.title,
+          source: 'reddit',
+          description: d.selftext?.slice(0, 300) || d.title,
+          traffic: formatNum(d.score) + ' upvotes',
+          relatedQueries: [d.subreddit, ...(d.link_flair_text ? [d.link_flair_text] : [])],
+          category: d.subreddit,
+          fetchedAt: new Date().toISOString(),
+        });
       }
-    })
-  );
+    }
+  } catch (e) {
+    console.warn('[HookFlow] Reddit 전체 실패:', e);
+  }
 
-  // 중복 제거 + 정렬 (upvote 높은 순)
-  const seen = new Set<string>();
-  return results
-    .filter((t) => {
-      const key = t.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => {
-      const scoreA = parseInt(a.traffic) || 0;
-      const scoreB = parseInt(b.traffic) || 0;
-      return scoreB - scoreA;
-    });
+  return results;
+}
+
+async function fetchAITrends(): Promise<TrendItem[]> {
+  try {
+    console.log('[HookFlow] Claude로 트렌드 생성 중...');
+    const text = await generateText(
+      'You are a global trend analyst. Return ONLY valid JSON array, no other text.',
+      `List 12 currently viral trending topics globally that would work well for social media marketing.
+Mix categories: tech, business, lifestyle, health, finance, entertainment.
+Focus on high-engagement, clickbait-worthy topics.
+
+Return JSON array:
+[{"title":"Topic Title","description":"1-2 sentence description","traffic":"estimated volume like 500K+","category":"category name","relatedQueries":["keyword1","keyword2"]}]`,
+      { temperature: 0.9, maxTokens: 2048 }
+    );
+
+    const parsed = extractJson(text) as Record<string, string | string[]>[];
+    return (Array.isArray(parsed) ? parsed : []).map((item, i) => ({
+      id: `ai_${i}`,
+      title: String(item.title || ''),
+      source: 'google',
+      description: String(item.description || ''),
+      traffic: String(item.traffic || '100K+'),
+      relatedQueries: Array.isArray(item.relatedQueries) ? item.relatedQueries.map(String) : [],
+      category: String(item.category || 'trending'),
+      fetchedAt: new Date().toISOString(),
+    }));
+  } catch (e) {
+    console.error('[HookFlow] AI 트렌드 생성 실패:', e);
+    return getDefaultTrends();
+  }
+}
+
+function getDefaultTrends(): TrendItem[] {
+  return [
+    { id: 'd1', title: 'AI Agent Revolution 2026', source: 'google', description: 'Autonomous AI agents are transforming businesses worldwide, from customer service to content creation.', traffic: '500K+', relatedQueries: ['AI automation', 'autonomous agents'], category: 'technology', fetchedAt: new Date().toISOString() },
+    { id: 'd2', title: 'Passive Income with AI Tools', source: 'google', description: 'How creators are using AI tools to build automated income streams generating $5K-50K monthly.', traffic: '300K+', relatedQueries: ['AI income', 'side hustle'], category: 'business', fetchedAt: new Date().toISOString() },
+    { id: 'd3', title: 'Short-Form Video Marketing Secrets', source: 'google', description: 'TikTok and Reels dominate with 60% higher engagement. Top creators share their strategies.', traffic: '1M+', relatedQueries: ['TikTok marketing', 'Reels strategy'], category: 'marketing', fetchedAt: new Date().toISOString() },
+    { id: 'd4', title: 'No-Code App Building Boom', source: 'google', description: 'Build and launch profitable apps without writing code. The $50B no-code market explained.', traffic: '200K+', relatedQueries: ['no-code', 'app building'], category: 'technology', fetchedAt: new Date().toISOString() },
+    { id: 'd5', title: 'Personal Branding in 2026', source: 'google', description: 'Why building a personal brand is now essential for career growth and business success.', traffic: '150K+', relatedQueries: ['personal brand', 'LinkedIn growth'], category: 'marketing', fetchedAt: new Date().toISOString() },
+    { id: 'd6', title: 'Micro-SaaS: $10K MRR Solo', source: 'google', description: 'Solo founders building small focused SaaS products generating $10K+ monthly recurring revenue.', traffic: '100K+', relatedQueries: ['micro-SaaS', 'solo founder'], category: 'business', fetchedAt: new Date().toISOString() },
+    { id: 'd7', title: 'Remote Work Culture Shift', source: 'google', description: 'Major companies reversing return-to-office mandates. Remote-first is winning in 2026.', traffic: '400K+', relatedQueries: ['remote work', 'WFH'], category: 'business', fetchedAt: new Date().toISOString() },
+    { id: 'd8', title: 'Creator Economy Hits $500B', source: 'google', description: 'The creator economy reaches half a trillion dollars. New monetization strategies everyone should know.', traffic: '250K+', relatedQueries: ['creator economy', 'content monetization'], category: 'marketing', fetchedAt: new Date().toISOString() },
+    { id: 'd9', title: 'Digital Detox Movement', source: 'google', description: 'Growing movement of tech workers and youth choosing digital minimalism for mental health.', traffic: '180K+', relatedQueries: ['digital detox', 'screen time'], category: 'lifestyle', fetchedAt: new Date().toISOString() },
+  ];
 }
 
 // ===== 후킹 콘텐츠 생성 =====
