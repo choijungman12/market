@@ -281,7 +281,7 @@ CTA: ${hook.callToAction}
   return Array.isArray(p) ? p : [p];
 }
 
-// ===== SNS 이미지 일괄 생성 (대본 내용 기반 사실적 이미지) =====
+// ===== SNS 이미지 일괄 생성 (대본 텍스트 포함 사실적 이미지) =====
 export async function generateSlideImages(
   slides: Record<string, unknown>[],
   platform: 'instagram' | 'tiktok' | 'facebook' = 'instagram'
@@ -289,9 +289,9 @@ export async function generateSlideImages(
   if (!hasGeminiKey()) return slides.map(() => '');
 
   const ratio: Record<string, string> = {
-    instagram: '1:1 square',
-    tiktok: '9:16 vertical',
-    facebook: '16:9 horizontal',
+    instagram: '정사각형 1:1',
+    tiktok: '세로 9:16',
+    facebook: '가로 16:9',
   };
 
   const results: string[] = new Array(slides.length).fill('');
@@ -302,23 +302,27 @@ export async function generateSlideImages(
       const title = String(s.title || '');
       const body = String(s.body || '');
       const isFirst = (i + j) === 0;
+      const isLast = (i + j) === slides.length - 1;
 
-      const prompt = `Photorealistic image for SNS post.
+      const prompt = `한국 SNS 마케팅용 고퀄리티 이미지를 만들어주세요.
 
-Scene: ${body}
-${isFirst
-  ? `This is the MAIN HOOK image. Must be extremely eye-catching and dramatic. Show a real scene that makes people stop scrolling.`
-  : `Show a realistic scene that visually represents: "${title}"`
-}
+장면 설명: ${body}
 
-Requirements:
-- Photorealistic, high quality, like a real photograph
-- Real people, real objects, real environments (NOT abstract, NOT gradient backgrounds)
-- The image must directly match the content topic
-- Vibrant colors, professional lighting, cinematic feel
-- ${ratio[platform]} aspect ratio
-- NO text overlay, NO words, NO letters on the image (text will be added separately)
-- Style: editorial photography, magazine quality`;
+${isFirst ? `이것은 메인 후킹 이미지입니다. 스크롤을 멈출 만큼 강렬하고 시선을 사로잡아야 합니다.
+큰 한국어 텍스트 "${title}"을 이미지 중앙에 굵고 크게 배치해주세요.
+배경은 해당 주제를 표현하는 실제 사진이어야 합니다.` :
+isLast ? `마지막 장입니다. CTA 느낌으로 만들어주세요.
+한국어 텍스트 "${title}"을 이미지에 포함해주세요.` :
+`한국어 텍스트 "${title}"을 이미지 상단 또는 중앙에 배치해주세요.
+배경은 "${body}" 내용을 표현하는 실제 사진이어야 합니다.`}
+
+필수 조건:
+- 사실적인 실제 사진 배경 (추상적 그라데이션 절대 금지)
+- 한국어 텍스트가 이미지 위에 선명하게 보여야 함
+- 텍스트는 흰색 또는 밝은색, 그림자 효과로 가독성 확보
+- 전문적인 SNS 마케팅 포스트 느낌
+- 비율: ${ratio[platform]}
+- 고해상도, 선명한 색감, 시네마틱 조명`;
 
       return generateNanoBananaImage(prompt)
         .then(img => { results[i + j] = img || ''; })
@@ -329,6 +333,35 @@ Requirements:
     if (i + 2 < slides.length) await new Promise(r => setTimeout(r, 3000));
   }
   return results;
+}
+
+// ===== 작업 히스토리 저장/조회 =====
+const HISTORY_KEY = 'hookflow_history';
+
+export function saveToHistory(entry: {
+  topic: string; headline: string; platform: string;
+  slideCount: number; images: string[]; scripts: { title: string; body: string }[];
+}) {
+  if (typeof window === 'undefined') return;
+  const history = getHistory();
+  history.unshift({
+    id: `h_${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    ...entry,
+  });
+  // 최대 50개 유지
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
+}
+
+export function getHistory(): { id: string; createdAt: string; topic: string; headline: string; platform: string; slideCount: number; images: string[]; scripts: { title: string; body: string }[] }[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+}
+
+export function deleteHistory(id: string) {
+  if (typeof window === 'undefined') return;
+  const history = getHistory().filter(h => h.id !== id);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
 // ===== 랜딩 페이지 HTML =====
