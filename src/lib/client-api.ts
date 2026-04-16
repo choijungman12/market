@@ -58,7 +58,7 @@ export async function generateNanoBananaImage(prompt: string): Promise<string | 
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -304,25 +304,27 @@ export async function generateSlideImages(
       const isFirst = (i + j) === 0;
       const isLast = (i + j) === slides.length - 1;
 
-      const prompt = `한국 SNS 마케팅용 고퀄리티 이미지를 만들어주세요.
+      const prompt = `${isFirst ?
+`스크롤을 멈추게 하는 강렬한 SNS 메인 이미지.
+"${title}" 한국어 텍스트를 이미지 정중앙에 크고 굵게 배치.
+배경: ${body} 장면을 표현하는 실제 사진.
+텍스트: 흰색, 두꺼운 고딕체, 그림자 효과로 선명하게.` :
+isLast ?
+`SNS 마지막 장 CTA 이미지.
+"${title}" 한국어 텍스트를 중앙에 배치.
+깔끔하고 행동을 유도하는 디자인.` :
+`SNS 콘텐츠 이미지.
+"${title}" 한국어 텍스트를 상단에 배치.
+배경: ${body} 내용을 보여주는 실제 사진.
+텍스트: 흰색, 굵은 글씨, 그림자 효과.`}
 
-장면 설명: ${body}
-
-${isFirst ? `이것은 메인 후킹 이미지입니다. 스크롤을 멈출 만큼 강렬하고 시선을 사로잡아야 합니다.
-큰 한국어 텍스트 "${title}"을 이미지 중앙에 굵고 크게 배치해주세요.
-배경은 해당 주제를 표현하는 실제 사진이어야 합니다.` :
-isLast ? `마지막 장입니다. CTA 느낌으로 만들어주세요.
-한국어 텍스트 "${title}"을 이미지에 포함해주세요.` :
-`한국어 텍스트 "${title}"을 이미지 상단 또는 중앙에 배치해주세요.
-배경은 "${body}" 내용을 표현하는 실제 사진이어야 합니다.`}
-
-필수 조건:
-- 사실적인 실제 사진 배경 (추상적 그라데이션 절대 금지)
-- 한국어 텍스트가 이미지 위에 선명하게 보여야 함
-- 텍스트는 흰색 또는 밝은색, 그림자 효과로 가독성 확보
-- 전문적인 SNS 마케팅 포스트 느낌
-- 비율: ${ratio[platform]}
-- 고해상도, 선명한 색감, 시네마틱 조명`;
+중요 규칙:
+- 실제 사진처럼 사실적인 이미지 (AI 느낌 금지, 일러스트 금지)
+- 실제 사람, 실제 장소, 실제 물건
+- DSLR 카메라로 촬영한 것 같은 고퀄리티
+- 자연스러운 조명, 따뜻한 색감
+- ${ratio[platform]} 비율
+- 한국어 텍스트가 반드시 이미지 위에 포함되어야 함`;
 
       return generateNanoBananaImage(prompt)
         .then(img => { results[i + j] = img || ''; })
@@ -344,16 +346,26 @@ export function saveToHistory(entry: {
 }) {
   if (typeof window === 'undefined') return;
   const history = getHistory();
+  // 이미지는 용량이 크므로 저장하지 않음 (localStorage 5MB 제한)
   history.unshift({
     id: `h_${Date.now()}`,
     createdAt: new Date().toISOString(),
-    ...entry,
+    topic: entry.topic,
+    headline: entry.headline,
+    platform: entry.platform,
+    slideCount: entry.slideCount,
+    imageCount: entry.images.filter(Boolean).length,
+    scripts: entry.scripts,
   });
-  // 최대 50개 유지
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 100)));
+  } catch {
+    // 용량 초과 시 오래된 기록 삭제 후 재시도
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
+  }
 }
 
-export function getHistory(): { id: string; createdAt: string; topic: string; headline: string; platform: string; slideCount: number; images: string[]; scripts: { title: string; body: string }[] }[] {
+export function getHistory(): { id: string; createdAt: string; topic: string; headline: string; platform: string; slideCount: number; imageCount?: number; scripts: { title: string; body: string }[] }[] {
   if (typeof window === 'undefined') return [];
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
 }
