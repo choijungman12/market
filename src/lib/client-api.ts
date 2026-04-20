@@ -35,7 +35,7 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
   };
 
   if (opts.webSearch) {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 15 }];
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
   }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -51,6 +51,12 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
 
   if (!res.ok) {
     const e = await res.text();
+    if (res.status === 429) {
+      throw new Error('분당 요청 한도(Rate Limit)를 초과했습니다. 1-2분 후 다시 시도해주세요.');
+    }
+    if (res.status === 529 || res.status === 503) {
+      throw new Error('Claude 서버가 일시적으로 과부하 상태입니다. 잠시 후 재시도해주세요.');
+    }
     throw new Error(`Claude 오류(${res.status}): ${e.slice(0, 150)}`);
   }
   const d = await res.json();
@@ -229,7 +235,7 @@ export async function fetchTrends(forceRefresh = false): Promise<TrendItem[]> {
 
 JSON 배열만 반환:
 [{"title":"","description":"","traffic":"","views":"","category":"","relatedQueries":[""]}]`,
-      { temp: 0.3, max: 10000, webSearch: true }
+      { temp: 0.3, max: 6000, webSearch: true }
     );
 
     const arr = extractJson(text) as Record<string, unknown>[];
@@ -353,7 +359,7 @@ export async function generateHooks(
 **최종 출력:** JSON 배열만 (설명 금지, 코드블록 금지)
 
 [{"headline":"","subheadline":"","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`,
-    { temp: 0.3, max: 16000, webSearch: true }
+    { temp: 0.3, max: 8000, webSearch: true }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
