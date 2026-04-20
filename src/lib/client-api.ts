@@ -52,7 +52,28 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
   if (!res.ok) {
     const e = await res.text();
     if (res.status === 429) {
-      throw new Error('분당 요청 한도(Rate Limit)를 초과했습니다. 1-2분 후 다시 시도해주세요.');
+      // Rate Limit → 20초 대기 후 자동 재시도 (1회)
+      console.warn('[Claude] Rate limit - 20초 후 자동 재시도');
+      await new Promise(r => setTimeout(r, 20000));
+      const retry = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify(body),
+      });
+      if (retry.ok) {
+        const d = await retry.json();
+        let text = '';
+        for (const block of d.content || []) {
+          if (block.type === 'text') text += block.text;
+        }
+        return text;
+      }
+      throw new Error('분당 요청 한도(Rate Limit) 초과. 1~2분 후 다시 시도해주세요.');
     }
     if (res.status === 529 || res.status === 503) {
       throw new Error('Claude 서버가 일시적으로 과부하 상태입니다. 잠시 후 재시도해주세요.');
@@ -284,40 +305,29 @@ function getDefaultTrends(): TrendItem[] {
   ];
 }
 
-// ===== 후킹 콘텐츠 생성 =====
+// ===== 후킹 콘텐츠 생성 (웹검색 옵션) =====
 export async function generateHooks(
   topic: { title: string; description: string; relatedQueries: string[] },
-  tone: string, count = 3
+  tone: string, count = 3,
+  useWebSearch: boolean = false  // 기본 OFF (rate limit 방지)
 ) {
   const toneMap: Record<string, string> = { informative: '정보형', provocative: '자극형', storytelling: '스토리형' };
-  const thisMonth = `${new Date().getFullYear()}년 ${new Date().getMonth() + 1}월`;
 
-  const text = await callClaude(
-    `한국 SNS 마케팅 작가. 웹 검색으로 최신 팩트 수집 후 대본 작성.
+  const system = useWebSearch
+    ? '한국 SNS 마케팅 작가. 웹 검색 후 JSON만 출력. 설명 금지.'
+    : '한국 SNS 마케팅 작가. JSON만 출력. 설명 금지. 오타 금지.';
 
-**중요 규칙:**
-- 설명 텍스트 금지. 검색 과정 설명 금지.
-- 검색 → 즉시 JSON만 출력
-- ${thisMonth} 이내 최신 뉴스만 사용
-- 한국어 오타 금지
+  const user = useWebSearch
+    ? `"${topic.title}" ${toneMap[tone] || tone} 대본 ${count}개. 웹 검색으로 최신 팩트 수집 후 JSON 배열만 반환:
+[{"headline":"15자","subheadline":"30자","bodyPoints":["팩트+숫자","","","",""],"callToAction":"","targetAudience":""}]`
+    : `"${topic.title}" ${toneMap[tone] || tone} 대본 ${count}개. JSON 배열만:
+[{"headline":"15자","subheadline":"30자","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`;
 
-출력 형식: JSON 배열만. 다른 텍스트 절대 금지.`,
-    `"${topic.title}" 토픽 ${toneMap[tone] || tone} 톤 대본 ${count}개.
-
-웹 검색 2-3회로 ${thisMonth} 최신 팩트 수집 후,
-아래 JSON만 출력 (설명 금지, 코드블록 금지):
-
-[
-  {
-    "headline": "후킹 제목 15자",
-    "subheadline": "구체수치/날짜 30자",
-    "bodyPoints": ["최신팩트1+숫자", "최신팩트2+숫자", "최신팩트3+숫자", "최신팩트4+숫자", "최신팩트5+숫자"],
-    "callToAction": "행동유도",
-    "targetAudience": "타겟"
-  }
-]`,
-    { temp: 0.3, max: 12000, webSearch: true }
-  );
+  const text = await callClaude(system, user, {
+    temp: 0.6,
+    max: useWebSearch ? 12000 : 3000,
+    webSearch: useWebSearch,
+  });
   try {
     const p = extractJson(text);
     return Array.isArray(p) ? p : [p];

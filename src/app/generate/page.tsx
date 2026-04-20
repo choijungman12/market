@@ -37,6 +37,7 @@ export default function GeneratePage() {
   const [companyName, setCompanyName] = useState('');
   const [platform, setPlatform] = useState<'instagram' | 'tiktok' | 'facebook'>('instagram');
   const [slideCount, setSlideCount] = useState(8);
+  const [useWebSearch, setUseWebSearch] = useState(false);
 
   useEffect(() => {
     const s = sessionStorage.getItem('selectedTopic');
@@ -46,9 +47,11 @@ export default function GeneratePage() {
   // Step 2: 대본 생성
   async function doGenHooks() {
     if (!topic || getActiveProvider() === 'none') { setError('설정에서 API 키를 입력해주세요.'); return; }
-    setLoading(true); setLoadingMsg('웹 검색 1라운드 → 2라운드 교차검증 → 최신 팩트 기반 대본 작성 중...'); setError(null);
+    setLoading(true);
+    setLoadingMsg(useWebSearch ? '웹 검색 중... 최신 팩트 기반 대본 작성 (30~60초, Rate Limit 주의)' : 'AI가 후킹 대본 작성 중... (5~10초)');
+    setError(null);
     try {
-      const result = await generateHooks(topic, tone, 3);
+      const result = await generateHooks(topic, tone, 3, useWebSearch);
       setHooks(result.map((h: Record<string, unknown>, i: number) => ({
         ...h, id: `hook_${i+1}`, topicId: topic.id, tone,
       })) as HookContent[]);
@@ -331,9 +334,25 @@ export default function GeneratePage() {
                     className="w-full px-4 py-2.5 rounded-lg bg-background border border-card-border text-sm focus:outline-none focus:border-accent" />
                 </div>
 
+                {/* 웹 검색 옵션 */}
+                <div className="p-4 rounded-xl bg-card-bg border border-card-border">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={useWebSearch} onChange={e => setUseWebSearch(e.target.checked)}
+                      className="mt-1 w-4 h-4 accent-accent" />
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-foreground/80">🔍 실시간 웹 검색 (선택)</div>
+                      <div className="text-xs text-foreground/40 mt-0.5">
+                        {useWebSearch
+                          ? '최신 뉴스/팩트 기반 대본 생성 (60초 + Rate Limit 발생 가능)'
+                          : '빠른 생성 (5~10초, AI 학습 데이터 사용)'}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
                 <button onClick={doGenHooks} disabled={loading}
                   className="w-full py-3.5 rounded-xl bg-gradient-to-r from-accent to-purple-500 text-white font-bold text-sm hover:opacity-90 shadow-lg shadow-accent/20 disabled:opacity-50">
-                  AI 후킹 대본 생성
+                  {useWebSearch ? '🔍 웹 검색 + AI 후킹 대본 생성' : '⚡ 빠른 AI 후킹 대본 생성'}
                 </button>
               </>
             ) : (
