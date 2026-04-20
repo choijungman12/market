@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Stepper from '@/components/Stepper';
 import {
-  generateHooks, generateCarouselSlides, generateSlideImages,
+  generateHooks, generateCarouselSlides, generateSlideImages, regenerateSingleImage,
   getActiveProvider, hasGeminiKey, saveToHistory,
 } from '@/lib/client-api';
 import type { HookContent, CarouselSet, WorkflowStep } from '@/types';
@@ -90,32 +90,49 @@ export default function GeneratePage() {
         };
       }));
     } catch (e) {
-      // AI 생성 실패 (Rate limit 등) → 주제/본문 기반 스마트 폴백
-      setError(`AI 대본 생성 실패로 자동 폴백 사용 중: ${e instanceof Error ? e.message : ''}. 1-2분 후 "다른 대본 선택" 후 재시도 가능.`);
-      const topicKey = hook.headline + ' ' + hook.subheadline;
+      // AI 생성 실패 → 궁금증 유발 내러티브 폴백 (Proof/Result 라벨 금지)
+      setError(`AI 대본 생성 실패: ${e instanceof Error ? e.message : ''}. 1-2분 후 재시도하면 AI가 더 좋은 대본을 작성합니다.`);
       const total = hook.bodyPoints?.length || 5;
       setEditingScripts((hook.bodyPoints || []).map((p, i) => {
         const isFirst = i === 0;
         const isLast = i === total - 1;
-        const stageName = isFirst ? 'Hook' : isLast ? 'CTA' : i === 1 ? 'Proof' : i === 2 ? 'Differentiation' : 'Result';
 
-        // 주제/본문 기반 이미지 프롬프트 자동 생성
-        const imagePrompt = `한국 ${topicKey} 주제에 맞는 사실적 장면.
-장면: ${p}
-인물: 30대 한국인, 해당 주제와 관련된 표정/상황
-장소: ${p.includes('헬스') || p.includes('운동') ? '헬스장' : p.includes('투자') || p.includes('주식') ? '사무실/카페' : p.includes('음식') || p.includes('식단') ? '주방/식당' : '실내 공간'}
-스타일: realistic photo, cinematic lighting, 4k, DSLR quality
-느낌: ${stageName === 'Hook' ? '충격과 놀람' : stageName === 'CTA' ? '결심과 동기부여' : '진지함과 신뢰'}`;
+        // 궁금증 유발 부제 패턴 (단계별 역할 숨김)
+        const curiosityHooks = [
+          '왜 지금 화제일까?',
+          '알려지지 않은 진실',
+          '다른 사례와의 결정적 차이',
+          '실제 결과 공개',
+          '지금 놓치면 안 되는 이유',
+        ];
+        const subtitle = isFirst ? hook.subheadline
+          : isLast ? '지금 바로 시작하세요'
+          : curiosityHooks[i] || '핵심 포인트';
+
+        // 주제 기반 장소/감정 감지
+        const location =
+          /헬스|운동|다이어트/.test(p) ? '헬스장에서 운동하는 모습'
+          : /투자|주식|금융|STO|토큰|증권/.test(p) ? '모던한 사무실에서 태블릿으로 차트 보는 모습'
+          : /음식|식단|먹/.test(p) ? '건강한 음식이 차려진 식탁'
+          : /부동산|집|농지/.test(p) ? '도시 아파트 또는 공터 풍경'
+          : /뷰티|화장품|스킨/.test(p) ? '거울 앞에서 뷰티 루틴하는 모습'
+          : /커플|연애/.test(p) ? '카페에서 대화 나누는 남녀'
+          : '주제에 맞는 현대적 한국 일상 장면';
+
+        const mood =
+          isFirst ? '충격적이고 시선을 사로잡는 분위기'
+          : isLast ? '결심한 듯한 강한 의지가 느껴지는 분위기'
+          : '진지하고 신뢰감 있는 분위기';
 
         return {
           title: isFirst ? hook.headline : p.length > 15 ? p.slice(0, 15) : p,
-          subtitle: isFirst ? hook.subheadline : `${stageName}: 핵심 포인트`,
+          subtitle,
           body: p,
-          imagePrompt,
+          imagePrompt: `${location}. ${mood}. 한국인 30대 주인공, DSLR 사진 퀄리티, cinematic lighting, 4k, photorealistic.`,
           textEmphasis: isFirst ? hook.headline : p.slice(0, 20),
           colorScheme: isFirst ? '강렬한 레드+블랙' : isLast ? '밝은 오렌지+화이트' : '차분한 다크+보라',
-          emotion: stageName === 'Hook' ? '나도 해볼까?' : stageName === 'CTA' ? '지금 시작!' : '그럴 수 있네',
-          type: stageName,
+          emotion: isFirst ? '충격, 궁금증' : isLast ? '결심, 실행 의지' : '공감, 깨달음',
+          type: isFirst ? 'Hook' : isLast ? 'CTA' : 'Content',
         };
       }));
     } finally {
@@ -193,6 +210,26 @@ export default function GeneratePage() {
     if (!carousel) return;
     for (let i = 0; i < carousel.generatedImages.length; i++) {
       if (carousel.generatedImages[i]) { downloadImage(i); await new Promise(r => setTimeout(r, 500)); }
+    }
+  }
+
+  // 개별 이미지 재생성
+  const [regenIdx, setRegenIdx] = useState<number | null>(null);
+  async function regenerateOne(index: number) {
+    if (!carousel || !hasGeminiKey()) return;
+    setRegenIdx(index);
+    try {
+      const slide = carousel.slides[index];
+      const isFirst = index === 0;
+      const isLast = index === carousel.slides.length - 1;
+      const newImg = await regenerateSingleImage(slide, platform, isFirst, isLast);
+      const newImages = [...carousel.generatedImages];
+      newImages[index] = newImg;
+      setCarousel({ ...carousel, generatedImages: newImages });
+    } catch (e) {
+      setError(`${index+1}장 재생성 실패: ${e instanceof Error ? e.message : ''}`);
+    } finally {
+      setRegenIdx(null);
     }
   }
 
@@ -428,11 +465,23 @@ export default function GeneratePage() {
                     <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/70 text-white text-[10px] font-bold">
                       {i === 0 ? '메인' : `${i+1}`}
                     </div>
-                    {hasImg && (
-                      <button onClick={() => downloadImage(i)}
-                        className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-black/70 text-white text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
-                        다운로드
-                      </button>
+                    {regenIdx === i && (
+                      <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white text-xs">
+                        <div className="w-6 h-6 rounded-full border-2 border-white/30 border-t-white animate-spin mr-2" />
+                        재생성 중...
+                      </div>
+                    )}
+                    {hasImg && regenIdx !== i && (
+                      <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => regenerateOne(i)}
+                          className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-[10px] hover:bg-purple-500">
+                          재생성
+                        </button>
+                        <button onClick={() => downloadImage(i)}
+                          className="px-2 py-1 rounded-lg bg-black/70 text-white text-[10px]">
+                          다운로드
+                        </button>
+                      </div>
                     )}
                   </div>
                 );

@@ -365,78 +365,69 @@ export async function generateHooks(
   return Array.isArray(p) ? p : [p];
 }
 
-// ===== SNS 이미지 대본 생성 (IR 구조 + 상세 프롬프트) =====
+// ===== SNS 이미지 대본 생성 (궁금증 유발 내러티브) =====
 export async function generateCarouselSlides(hook: {
   headline: string; subheadline: string; bodyPoints: string[]; callToAction: string;
 }, count: number = 5) {
-  // IR 구조 매핑 (Hook → Proof → Differentiation → Result → CTA)
-  const structure = count === 5
-    ? ['Hook (결과 먼저)', 'Proof (근거/데이터)', 'Differentiation (차별점)', 'Result (실제 변화)', 'CTA (행동 유도)']
-    : count === 6
-    ? ['Hook', 'Problem', 'Proof', 'Differentiation', 'Result', 'CTA']
-    : count === 7
-    ? ['Hook', 'Problem', 'Proof', 'Differentiation', 'Method', 'Result', 'CTA']
-    : count === 8
-    ? ['Hook', 'Problem', 'Reason', 'Proof', 'Differentiation', 'Method', 'Result', 'CTA']
-    : Array.from({ length: count }, (_, i) =>
-        i === 0 ? 'Hook' : i === count - 1 ? 'CTA' : i === 1 ? 'Proof' : i === 2 ? 'Differentiation' : 'Result'
-      );
-
   const text = await callClaude(
-    `당신은 SNS 바이럴 콘텐츠 전문가입니다.
-구조: Hook → Proof → Differentiation → Result → CTA (IR 스타일 설득 구조)
+    `당신은 한국 SNS 바이럴 콘텐츠 작가입니다.
 
-**절대 규칙:**
-1. Hook은 결과를 먼저 보여줌 ("왜" 말고 "어떻게 되는지")
-2. 숫자 → 감정 연결 ("52% 증가" ❌ → "같은 시간에 두배 효과" ⭕)
-3. CTA는 "오늘 바로 시작 가능" 강조
-4. 이미지 프롬프트는 반드시 5요소 포함:
-   - 인물 (성별/나이/상황)
-   - 장소 (구체적 공간)
-   - 행동 (동작, 표정)
-   - 감정 (놀람, 결심 등)
-   - 스타일 (realistic, cinematic, 4k)
-5. 모든 한국어 오타 금지, 맞춤법 완벽
+**절대 금지 사항:**
+- 부제에 "Proof:", "Result:", "Differentiation:", "핵심 포인트" 같은 레이블 작성 절대 금지
+- 학술적/설명적 문구 금지
+- "증거:", "결과:", "근거:" 같은 단어 금지
 
-JSON만 반환 (코드블록 금지).`,
+**부제 작성 원칙 (필수):**
+- 답을 주지 말고 **질문만 남기기** - 독자가 다음 장으로 넘기도록
+- 미완성 긴장: "근데 그게 문제였습니다", "그때는 몰랐어요"
+- 반전 예고: "전문가가 틀렸습니다", "정반대였습니다"
+- 공범 유도: "사실 저도 속았어요", "우리만 모릅니다"
+- 감정 암시: "심장이 뛰었습니다", "눈을 의심했어요"
+
+**${count}장 구성 (긴장감 상승 → 반전 → 행동):**
+- 1장 (Hook): 충격적 주장 or 놀라운 결과 먼저 제시
+- 2~${count-2}장: 미스터리 쌓기 → 정보 공개 → 반전
+- ${count-1}장: 클라이맥스 (핵심 반전/결론)
+- ${count}장 (CTA): 행동 유도 + 여운
+
+**규칙:**
+- 한국어 오타 절대 금지
+- 숫자 → 감정 연결 ("52% 증가" ❌ → "두배 효과" ⭕)
+- JSON만 반환 (코드블록 금지)`,
     `주제: "${hook.headline}"
-부제: "${hook.subheadline}"
-핵심 내용: ${hook.bodyPoints.join(' | ')}
+팩트: ${hook.bodyPoints.join(' | ')}
 CTA: ${hook.callToAction}
 
-SNS 이미지 ${count}장 대본을 아래 구조로 작성:
-${structure.map((s, i) => `${i+1}장: ${s}`).join('\n')}
+궁금증 유발 ${count}장 캐러셀 대본:
 
-각 장 필수 필드:
-- title: 강한 어그로 제목 (10-15자)
-- subtitle: 문제 제기 + 해결 암시 (20-30자)
-- body: 쉬운 설명 + 궁금증 (80-120자, 예시/숫자 포함)
-- imagePrompt: DSLR 촬영 같은 사실적 이미지 생성용 영어 프롬프트
-  * 반드시 포함: person(성별/나이), location(구체적), action(동작), emotion(감정), style(realistic, cinematic, 4k)
-  * 예시: "30대 한국 남성이 헬스장 러닝머신에서 땀 흘리며 운동, 경사도 높게 설정, 놀란 표정, realistic photo, cinematic lighting, 4k"
-- textEmphasis: 이미지에 강조 표시할 핵심 텍스트 (짧게, 예: "30분 = 지방 삭제?")
-- colorScheme: 색상 톤 (예: "레드 + 블랙 대비", "파란색 깔끔", "따뜻한 오렌지")
-- emotion: 유도할 감정 (예: "나도 해볼까?", "충격", "결심")
+각 장 필드:
+- title: 충격/공감/호기심 (10-15자, 강한 어그로)
+- subtitle: **답을 주지 않고 다음 슬라이드 궁금하게** (15-25자)
+  예: "근데 그게 전부가 아니었습니다", "이게 바로 그 이유입니다", "지금부터 진짜 시작입니다"
+  절대 금지: "Proof:", "Result:", "핵심 포인트"
+- body: 내용 풀어서 설명 (60-100자, 쉬운 예시)
+- imagePrompt: DSLR 사실적 한국 장면 (인물/장소/행동/감정/스타일 5요소 영어로)
+  예: "30대 한국 남성이 모던한 사무실에서 노트북 화면을 놀란 표정으로 보는 모습, realistic photo, cinematic lighting, 4k"
+- textEmphasis: 이미지에 쓸 큰 한국어 텍스트 (짧게)
+- colorScheme: 색상 (예: "충격의 레드+블랙", "신뢰의 블루+화이트")
+- emotion: 유도 감정 (예: "뭐야 진짜?", "나도 해볼까")
 
-JSON 배열:
+JSON 배열 (type 필드는 내부 사용, 사용자에게는 안 보임):
 [
   {
     "id": "slide_1",
     "order": 1,
     "type": "Hook",
-    "title": "강한 어그로 제목",
-    "subtitle": "문제 + 해결 암시",
-    "body": "쉬운 설명 + 궁금증 (80-120자)",
-    "imagePrompt": "영어 이미지 생성 프롬프트 (5요소 포함)",
-    "textEmphasis": "이미지 핵심 텍스트",
-    "colorScheme": "색상 톤",
-    "emotion": "유도 감정",
-    "bgColor": "#0F172A",
-    "textColor": "#F8FAFC",
-    "accentColor": "#818CF8"
+    "title": "",
+    "subtitle": "답을 주지 않는 궁금증 부제",
+    "body": "",
+    "imagePrompt": "",
+    "textEmphasis": "",
+    "colorScheme": "",
+    "emotion": ""
   }
 ]`,
-    { temp: 0.6, max: 8000 }
+    { temp: 0.7, max: 8000 }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
@@ -460,12 +451,13 @@ export async function generateSlideImages(
   for (let i = 0; i < slides.length; i += 2) {
     const batch = slides.slice(i, i + 2);
     const promises = batch.map((s, j) => {
+      const idx = i + j;
       const title = String(s.title || '');
       const subtitle = String(s.subtitle || '');
       const textEmphasis = String(s.textEmphasis || title);
       const imagePromptDetail = String(s.imagePrompt || '');
       const colorScheme = String(s.colorScheme || '');
-      const isLast = (i + j) === slides.length - 1;
+      const isLast = idx === slides.length - 1;
 
       const prompt = `한국 SNS 콘텐츠 이미지 생성.
 
@@ -505,14 +497,45 @@ ${isLast ? '- CTA 느낌, "지금 시작" 버튼 느낌' : ''}
 출력 전 검증: 이미지 내 모든 한국어가 "${textEmphasis}"와 "${subtitle}"와 정확히 일치하는지 확인.`;
 
       return generateNanoBananaImage(prompt)
-        .then(img => { results[i + j] = img || ''; })
-        .catch(() => { results[i + j] = ''; });
+        .then(img => { results[idx] = img || ''; })
+        .catch(e => { console.warn(`[Image ${idx+1}] 실패:`, e); results[idx] = ''; });
     });
 
-    await Promise.all(promises);
+    await Promise.allSettled(promises);
     if (i + 2 < slides.length) await new Promise(r => setTimeout(r, 3000));
   }
   return results;
+}
+
+// ===== 개별 이미지 재생성 =====
+export async function regenerateSingleImage(
+  slide: Record<string, unknown>,
+  platform: 'instagram' | 'tiktok' | 'facebook' = 'instagram',
+  isFirst: boolean = false,
+  isLast: boolean = false
+): Promise<string> {
+  const title = String(slide.title || '');
+  const subtitle = String(slide.subtitle || '');
+  const textEmphasis = String(slide.textEmphasis || title);
+  const imagePromptDetail = String(slide.imagePrompt || '');
+  const colorScheme = String(slide.colorScheme || '');
+  const ratio: Record<string, string> = {
+    instagram: '정사각형 1:1',
+    tiktok: '세로 9:16',
+    facebook: '가로 16:9',
+  };
+
+  const prompt = `한국 SNS 콘텐츠 이미지.
+장면: ${imagePromptDetail}
+색상: ${colorScheme || '다크 + 보라'}
+상단/하단 한국어 텍스트: "${textEmphasis}"${subtitle ? ` / "${subtitle}"` : ''}
+텍스트: 흰색 두꺼운 고딕 + 검정 그림자
+규칙: 중앙 텍스트 금지, DSLR 사실적 사진, 실제 한국인, 한국어 오타 금지
+비율: ${ratio[platform]}
+${isLast ? 'CTA 느낌, 결심하는 인물' : isFirst ? '스크롤 멈추는 충격적 장면' : '진지한 정보 전달'}`;
+
+  const img = await generateNanoBananaImage(prompt);
+  return img || '';
 }
 
 // ===== 작업 히스토리 (IndexedDB - 대용량 이미지 저장) =====
