@@ -19,7 +19,16 @@ export default function GeneratePage() {
   const [tone, setTone] = useState('provocative');
   const [hooks, setHooks] = useState<HookContent[]>([]);
   const [selectedHook, setSelectedHook] = useState<HookContent | null>(null);
-  const [editingScripts, setEditingScripts] = useState<{ title: string; subtitle: string; body: string; example?: string }[]>([]);
+  const [editingScripts, setEditingScripts] = useState<{
+    title: string;
+    subtitle: string;
+    body: string;
+    imagePrompt?: string;
+    textEmphasis?: string;
+    colorScheme?: string;
+    emotion?: string;
+    type?: string;
+  }[]>([]);
   const [carousel, setCarousel] = useState<CarouselSet | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
@@ -63,15 +72,19 @@ export default function GeneratePage() {
         title: String(s.title || ''),
         subtitle: String(s.subtitle || ''),
         body: String(s.body || ''),
-        example: String(s.example || ''),
+        imagePrompt: String(s.imagePrompt || ''),
+        textEmphasis: String(s.textEmphasis || ''),
+        colorScheme: String(s.colorScheme || ''),
+        emotion: String(s.emotion || ''),
+        type: String(s.type || ''),
       })));
     } catch (e) {
-      // 실패 시 기본값 사용
       setEditingScripts((hook.bodyPoints || []).map((p, i) => ({
         title: i === 0 ? hook.headline : `${i+1}. 핵심 포인트`,
         subtitle: i === 0 ? hook.subheadline : '상세 내용',
         body: p,
-        example: '',
+        imagePrompt: '', textEmphasis: '', colorScheme: '', emotion: '',
+        type: i === 0 ? 'Hook' : i === (hook.bodyPoints?.length || 0) - 1 ? 'CTA' : 'Content',
       })));
     } finally {
       setLoading(false);
@@ -79,12 +92,12 @@ export default function GeneratePage() {
   }
 
   // 대본 편집
-  function updateScript(index: number, field: 'title' | 'subtitle' | 'body' | 'example', value: string) {
+  function updateScript(index: number, field: 'title' | 'subtitle' | 'body' | 'imagePrompt' | 'textEmphasis' | 'colorScheme' | 'emotion', value: string) {
     setEditingScripts(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
   }
 
   // 대본 추가/삭제
-  function addScript() { setEditingScripts(prev => [...prev, { title: '새 장면', subtitle: '부제목', body: '내용을 입력하세요', example: '' }]); }
+  function addScript() { setEditingScripts(prev => [...prev, { title: '새 장면', subtitle: '부제목', body: '내용을 입력하세요', imagePrompt: '', textEmphasis: '', colorScheme: '', emotion: '' }]); }
   function removeScript(index: number) { if (editingScripts.length > 2) setEditingScripts(prev => prev.filter((_, i) => i !== index)); }
 
   // Step 3: 이미지 생성
@@ -95,9 +108,11 @@ export default function GeneratePage() {
       // 편집된 대본으로 슬라이드 구조 직접 생성
       const slides = editingScripts.map((s, i) => ({
         id: `slide_${i+1}`, order: i+1,
-        type: i === 0 ? 'cover' : i === editingScripts.length - 1 ? 'cta' : 'content',
-        title: s.title, subtitle: s.subtitle, body: s.body, example: s.example, bullets: [],
-        bgColor: '#0F172A', textColor: '#F8FAFC', accentColor: '#818CF8',
+        type: s.type || (i === 0 ? 'Hook' : i === editingScripts.length - 1 ? 'CTA' : 'Content'),
+        title: s.title, subtitle: s.subtitle, body: s.body,
+        imagePrompt: s.imagePrompt, textEmphasis: s.textEmphasis || s.title,
+        colorScheme: s.colorScheme, emotion: s.emotion,
+        bullets: [], bgColor: '#0F172A', textColor: '#F8FAFC', accentColor: '#818CF8',
       }));
 
       let images: string[] = [];
@@ -276,7 +291,7 @@ export default function GeneratePage() {
                         <div className="flex items-center gap-2">
                           <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-accent text-white' : 'bg-card-border text-foreground/50'}`}>{i+1}</span>
                           <span className={`text-xs font-bold ${i === 0 ? 'text-accent' : 'text-foreground/40'}`}>
-                            {i === 0 ? '메인 (어그로 - 스크롤 멈추게!)' : i === editingScripts.length - 1 ? '마지막 (CTA)' : `${i + 1}장`}
+                            {script.type || (i === 0 ? 'Hook' : i === editingScripts.length - 1 ? 'CTA' : 'Content')}
                           </span>
                         </div>
                         {editingScripts.length > 2 && (
@@ -284,36 +299,57 @@ export default function GeneratePage() {
                         )}
                       </div>
 
-                      <div className="space-y-2.5">
-                        <div>
-                          <label className="text-[10px] text-accent font-bold mb-1 block">제목 (10-15자)</label>
-                          <input type="text" value={script.title} onChange={e => updateScript(i, 'title', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm font-bold focus:outline-none focus:border-accent"
-                            placeholder="짧고 임팩트 있는 제목" />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] text-foreground/50 font-bold mb-1 block">부제목 (20-30자)</label>
-                          <input type="text" value={script.subtitle} onChange={e => updateScript(i, 'subtitle', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm focus:outline-none focus:border-accent"
-                            placeholder="궁금증을 유발하는 부제목" />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] text-foreground/50 font-bold mb-1 block">본문 (80-150자, 초보자도 이해 가능하게 예시 포함)</label>
-                          <textarea value={script.body} onChange={e => updateScript(i, 'body', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm resize-none focus:outline-none focus:border-accent" rows={3}
-                            placeholder="상세 내용 (예시, 비유, 숫자 포함)" />
-                        </div>
-
-                        {(script.example || script.example === '') && (
+                      <div className="space-y-3">
+                        {/* 기본 콘텐츠 */}
+                        <div className="space-y-2 p-3 rounded-lg bg-background/50 border border-card-border/50">
+                          <div className="text-[10px] text-accent font-bold">콘텐츠</div>
                           <div>
-                            <label className="text-[10px] text-foreground/30 font-bold mb-1 block">예시/팁 (선택)</label>
-                            <input type="text" value={script.example || ''} onChange={e => updateScript(i, 'example', e.target.value)}
-                              className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-xs text-foreground/70 focus:outline-none focus:border-accent"
-                              placeholder="예: 실제 사례, 팁, 추가 정보" />
+                            <label className="text-[10px] text-foreground/50 mb-1 block">제목 (10-15자, 강한 어그로)</label>
+                            <input type="text" value={script.title} onChange={e => updateScript(i, 'title', e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm font-bold focus:outline-none focus:border-accent" />
                           </div>
-                        )}
+                          <div>
+                            <label className="text-[10px] text-foreground/50 mb-1 block">부제 (20-30자, 문제+해결)</label>
+                            <input type="text" value={script.subtitle} onChange={e => updateScript(i, 'subtitle', e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm focus:outline-none focus:border-accent" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-foreground/50 mb-1 block">본문 (80-120자, 쉬운 설명+궁금증)</label>
+                            <textarea value={script.body} onChange={e => updateScript(i, 'body', e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm resize-none focus:outline-none focus:border-accent" rows={3} />
+                          </div>
+                        </div>
+
+                        {/* 이미지 프롬프트 */}
+                        <div className="space-y-2 p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                          <div className="text-[10px] text-purple-400 font-bold">이미지 설정 (NanoBanana)</div>
+                          <div>
+                            <label className="text-[10px] text-foreground/50 mb-1 block">이미지 프롬프트 (인물+장소+행동+감정+스타일)</label>
+                            <textarea value={script.imagePrompt || ''} onChange={e => updateScript(i, 'imagePrompt', e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-xs focus:outline-none focus:border-accent" rows={2}
+                              placeholder="30대 한국 남성이 헬스장에서 땀 흘리며 운동, 놀란 표정, realistic, cinematic, 4k" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-foreground/50 mb-1 block">이미지 내 강조 텍스트</label>
+                              <input type="text" value={script.textEmphasis || ''} onChange={e => updateScript(i, 'textEmphasis', e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-xs focus:outline-none focus:border-accent"
+                                placeholder="30분 = 지방 삭제?" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-foreground/50 mb-1 block">색상 톤</label>
+                              <input type="text" value={script.colorScheme || ''} onChange={e => updateScript(i, 'colorScheme', e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-xs focus:outline-none focus:border-accent"
+                                placeholder="레드 + 블랙 대비" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-foreground/50 mb-1 block">유도 감정</label>
+                            <input type="text" value={script.emotion || ''} onChange={e => updateScript(i, 'emotion', e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-xs focus:outline-none focus:border-accent"
+                              placeholder="나도 해볼까?" />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -414,10 +450,16 @@ export default function GeneratePage() {
                           <div className="text-[10px] text-foreground/40 font-bold">본문</div>
                           <div className="text-sm text-foreground/60 leading-relaxed">{s.body}</div>
                         </div>
-                        {s.example && (
+                        {s.emotion && (
                           <div>
-                            <div className="text-[10px] text-foreground/30 font-bold">예시/팁</div>
-                            <div className="text-xs text-foreground/50 italic">{s.example}</div>
+                            <div className="text-[10px] text-purple-400 font-bold">유도 감정</div>
+                            <div className="text-xs text-foreground/50 italic">{s.emotion}</div>
+                          </div>
+                        )}
+                        {s.imagePrompt && (
+                          <div>
+                            <div className="text-[10px] text-purple-400 font-bold">이미지 프롬프트</div>
+                            <div className="text-[10px] text-foreground/40 font-mono">{s.imagePrompt}</div>
                           </div>
                         )}
                       </div>

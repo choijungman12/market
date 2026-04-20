@@ -359,55 +359,78 @@ export async function generateHooks(
   return Array.isArray(p) ? p : [p];
 }
 
-// ===== SNS 이미지 대본 생성 (상세 버전) =====
+// ===== SNS 이미지 대본 생성 (IR 구조 + 상세 프롬프트) =====
 export async function generateCarouselSlides(hook: {
   headline: string; subheadline: string; bodyPoints: string[]; callToAction: string;
-}, count: number = 8) {
+}, count: number = 5) {
+  // IR 구조 매핑 (Hook → Proof → Differentiation → Result → CTA)
+  const structure = count === 5
+    ? ['Hook (결과 먼저)', 'Proof (근거/데이터)', 'Differentiation (차별점)', 'Result (실제 변화)', 'CTA (행동 유도)']
+    : count === 6
+    ? ['Hook', 'Problem', 'Proof', 'Differentiation', 'Result', 'CTA']
+    : count === 7
+    ? ['Hook', 'Problem', 'Proof', 'Differentiation', 'Method', 'Result', 'CTA']
+    : count === 8
+    ? ['Hook', 'Problem', 'Reason', 'Proof', 'Differentiation', 'Method', 'Result', 'CTA']
+    : Array.from({ length: count }, (_, i) =>
+        i === 0 ? 'Hook' : i === count - 1 ? 'CTA' : i === 1 ? 'Proof' : i === 2 ? 'Differentiation' : 'Result'
+      );
+
   const text = await callClaude(
-    `SNS 콘텐츠 작가. 초보자도 이해하기 쉽게 친절하게 작성. 한국어 맞춤법 완벽. JSON만 반환.
+    `당신은 SNS 바이럴 콘텐츠 전문가입니다.
+구조: Hook → Proof → Differentiation → Result → CTA (IR 스타일 설득 구조)
 
-각 슬라이드는 3단 구조:
-1. title: 짧은 후킹 제목 (10-15자)
-2. subtitle: 제목 보충 부제목 (20-30자)
-3. body: 상세 본문 내용 (80-150자, 예시/비유/숫자 포함하여 초보자도 쉽게 이해)
+**절대 규칙:**
+1. Hook은 결과를 먼저 보여줌 ("왜" 말고 "어떻게 되는지")
+2. 숫자 → 감정 연결 ("52% 증가" ❌ → "같은 시간에 두배 효과" ⭕)
+3. CTA는 "오늘 바로 시작 가능" 강조
+4. 이미지 프롬프트는 반드시 5요소 포함:
+   - 인물 (성별/나이/상황)
+   - 장소 (구체적 공간)
+   - 행동 (동작, 표정)
+   - 감정 (놀람, 결심 등)
+   - 스타일 (realistic, cinematic, 4k)
+5. 모든 한국어 오타 금지, 맞춤법 완벽
 
-본문은 반드시 포함:
-- 구체적 예시 ("예를 들어...", "실제로는...")
-- 쉬운 비유 ("마치 ~처럼")
-- 숫자/데이터 (%, 금액, 기간 등)
-- 전문용어는 반드시 풀어서 설명`,
+JSON만 반환 (코드블록 금지).`,
     `주제: "${hook.headline}"
 부제: "${hook.subheadline}"
 핵심 내용: ${hook.bodyPoints.join(' | ')}
 CTA: ${hook.callToAction}
 
-위 내용으로 SNS 이미지 ${count}장 대본을 작성하세요.
+SNS 이미지 ${count}장 대본을 아래 구조로 작성:
+${structure.map((s, i) => `${i+1}장: ${s}`).join('\n')}
 
-[구성]
-1장(cover): 스크롤 멈추는 강렬한 후킹 (title + subtitle + 간단한 미리보기 body)
-2~${count-1}장(content): 핵심 포인트 전달
-   - 각 장은 1개 포인트에 집중
-   - title: 짧고 임팩트 있게
-   - subtitle: 궁금증 유발
-   - body: 상세 설명 (예시, 비유, 숫자 포함하여 초보자도 이해 가능)
-${count}장(cta): 행동 유도 + 팔로우/저장 요청
+각 장 필수 필드:
+- title: 강한 어그로 제목 (10-15자)
+- subtitle: 문제 제기 + 해결 암시 (20-30자)
+- body: 쉬운 설명 + 궁금증 (80-120자, 예시/숫자 포함)
+- imagePrompt: DSLR 촬영 같은 사실적 이미지 생성용 영어 프롬프트
+  * 반드시 포함: person(성별/나이), location(구체적), action(동작), emotion(감정), style(realistic, cinematic, 4k)
+  * 예시: "30대 한국 남성이 헬스장 러닝머신에서 땀 흘리며 운동, 경사도 높게 설정, 놀란 표정, realistic photo, cinematic lighting, 4k"
+- textEmphasis: 이미지에 강조 표시할 핵심 텍스트 (짧게, 예: "30분 = 지방 삭제?")
+- colorScheme: 색상 톤 (예: "레드 + 블랙 대비", "파란색 깔끔", "따뜻한 오렌지")
+- emotion: 유도할 감정 (예: "나도 해볼까?", "충격", "결심")
 
-JSON 배열 반환 (각 장은 title + subtitle + body + example 필드 포함):
+JSON 배열:
 [
   {
     "id": "slide_1",
     "order": 1,
-    "type": "cover",
-    "title": "짧은 제목 (10-15자)",
-    "subtitle": "부제목 (20-30자)",
-    "body": "상세 본문 (80-150자, 초보자도 이해 가능하게 예시/비유/숫자 포함)",
-    "example": "추가 예시나 팁 (선택, 40자 이내)",
+    "type": "Hook",
+    "title": "강한 어그로 제목",
+    "subtitle": "문제 + 해결 암시",
+    "body": "쉬운 설명 + 궁금증 (80-120자)",
+    "imagePrompt": "영어 이미지 생성 프롬프트 (5요소 포함)",
+    "textEmphasis": "이미지 핵심 텍스트",
+    "colorScheme": "색상 톤",
+    "emotion": "유도 감정",
     "bgColor": "#0F172A",
     "textColor": "#F8FAFC",
     "accentColor": "#818CF8"
   }
 ]`,
-    { temp: 0.6, max: 6000 }
+    { temp: 0.6, max: 8000 }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
@@ -433,40 +456,47 @@ export async function generateSlideImages(
     const promises = batch.map((s, j) => {
       const title = String(s.title || '');
       const subtitle = String(s.subtitle || '');
-      const body = String(s.body || '');
-      const isFirst = (i + j) === 0;
+      const textEmphasis = String(s.textEmphasis || title);
+      const imagePromptDetail = String(s.imagePrompt || '');
+      const colorScheme = String(s.colorScheme || '');
       const isLast = (i + j) === slides.length - 1;
 
-      // 이미지에 표시할 텍스트 조합
-      const displayText = subtitle ? `${title}\n\n${subtitle}` : title;
+      const prompt = `한국 SNS 콘텐츠 이미지 생성.
 
-      const prompt = `${isFirst ?
-`스크롤 멈추는 한국 SNS 메인 이미지.
-이미지 중앙에 아래 한국어를 크고 굵게 정확히 표시:
-"${title}"
-${subtitle ? `\n그 아래 작게 표시: "${subtitle}"` : ''}
-배경: ${body} 장면의 실제 DSLR 사진.
-텍스트 스타일: 흰색 두꺼운 고딕체, 검정 그림자.` :
-isLast ?
-`한국 SNS CTA 이미지.
-중앙에 한국어 표시: "${title}"
-${subtitle ? `부제: "${subtitle}"` : ''}
-행동 유도 디자인, 실제 사진 배경.` :
-`한국 SNS 콘텐츠 이미지.
-상단에 한국어 제목: "${title}"
-${subtitle ? `제목 아래 부제: "${subtitle}"` : ''}
-배경: "${body}" 내용을 표현하는 실제 사진.
-텍스트: 흰색 굵은 글씨, 그림자 효과.`}
+[이미지 장면 묘사 - 반드시 이 내용을 사실적으로 표현]
+${imagePromptDetail}
 
-필수 규칙:
-1. 위에 명시된 한국어를 정확히 표기 (오타/자모음 깨짐 절대 금지)
-2. 제시된 문구 외 다른 한국어 생성 금지
-3. DSLR 촬영 같은 사실적 사진 (AI/일러스트 금지)
-4. 실제 한국인, 한국 장소, 실제 물건
-5. 자연스러운 조명, 시네마틱 색감
-6. 비율: ${ratio[platform]}
+[색상 톤]
+${colorScheme || '다크 모드 (#0F172A) + 보라 액센트 (#818CF8)'}
 
-출력 전 검증: 이미지 내 한국어가 "${title}" 및 "${subtitle}"와 정확히 일치하는지 확인.`;
+[한국어 텍스트 오버레이 - 반드시 이대로 정확히 표기]
+상단 또는 하단에 큰 한국어 텍스트:
+"${textEmphasis}"
+${subtitle ? `\n그 아래 작은 한국어 부제:\n"${subtitle}"` : ''}
+
+[텍스트 배치 규칙]
+- 중앙 금지, 반드시 상단 또는 하단 배치
+- 흰색 두꺼운 고딕체 + 검정 그림자로 선명하게
+- 인물 얼굴 가리지 않도록 주의
+${isLast ? '- CTA 느낌, "지금 시작" 버튼 느낌' : ''}
+
+[필수 포함 요소 - 5가지]
+1. 인물: 실제 한국인 (성별/나이 구체화)
+2. 장소: 구체적 공간
+3. 행동: 동작과 표정 표현
+4. 감정: 공감 유도
+5. 스타일: DSLR 촬영, realistic, cinematic, 4k
+
+[절대 금지]
+- 추상적 그라데이션 배경 (반드시 실제 사진)
+- AI/일러스트 스타일
+- 한국어 오타, 자모음 깨짐
+- 제시된 문구 외 다른 한국어 생성
+- 중앙에 텍스트 배치
+
+[비율] ${ratio[platform]}
+
+출력 전 검증: 이미지 내 모든 한국어가 "${textEmphasis}"와 "${subtitle}"와 정확히 일치하는지 확인.`;
 
       return generateNanoBananaImage(prompt)
         .then(img => { results[i + j] = img || ''; })
