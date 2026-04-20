@@ -139,7 +139,7 @@ export type TrendItem = {
 
 // ===== 24시간 캐시 =====
 const CACHE_KEY = 'hookflow_trends_cache';
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
+const CACHE_TTL = 6 * 60 * 60 * 1000; // 6시간 (하루 4번 업데이트)
 
 function getCachedTrends(): TrendItem[] | null {
   if (typeof window === 'undefined') return null;
@@ -169,40 +169,40 @@ export async function fetchTrends(forceRefresh = false): Promise<TrendItem[]> {
 
   try {
     const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-    const month = new Date().getMonth() + 1;
-    const seasonInfo = month >= 3 && month <= 5 ? '봄 시즌 (벚꽃, 나들이, 봄맞이)' :
-      month >= 6 && month <= 8 ? '여름 시즌 (휴가, 수영복, 다이어트)' :
-      month >= 9 && month <= 11 ? '가을 시즌 (단풍, 패션, 추석)' : '겨울 시즌 (크리스마스, 연말, 방한)';
 
     const text = await callClaude(
-      '2026년 최신 한국/글로벌 SNS 트렌드 분석가. 한국어. 오타금지. JSON만.',
-      `오늘은 ${today}입니다. 현재 시즌: ${seasonInfo}.
+      `2026년 한국/글로벌 실시간 트렌드 분석가.
+필수: 반드시 실제 웹 검색으로 오늘 날짜의 실제 트렌드 수집.
+네이버 실시간 검색어, 구글 트렌드, 유튜브 인기 동영상, 트위터/X 트렌딩, 해외 뉴스 등에서 실제 데이터만 수집.
+추측/가상 데이터 절대 금지. 오래된 자료 금지.
+한국어 오타/맞춤법 완벽. JSON만 반환.`,
+      `오늘은 ${today}입니다.
 
-2026년 4월 현재 SNS에서 가장 바이럴한 최신 토픽을 카테고리별 각 2-3개씩 총 35개 이상 생성하세요.
+웹 검색을 사용해서 다음을 조사하세요:
+1. "네이버 실시간 급상승" 검색 - 한국 실시간 검색어
+2. "구글 트렌드 한국" 검색 - 한국 Google Trends 오늘
+3. "유튜브 인기 동영상 한국" 검색 - 유튜브 트렌딩
+4. "오늘의 뉴스 바이럴" 검색 - 핫이슈 뉴스
 
-중요: 반드시 2026년 최신 트렌드만. 오래된 자료 절대 불가.
+검색 결과에서 실제 트렌드 30개 이상을 카테고리별로 분류:
+- 음식 / 다이어트 / 건강 / 식단 / 쇼핑 / 화장품 / 의류
+- 인플루언서 / 셀럽 / 테크 / 재테크
+- 시즌 / 글로벌 / 지혜 / 연애
 
-카테고리:
-- 음식: 맛집, 레시피, 먹방 (2026 최신)
-- 다이어트: 운동, 피트니스 (올해 유행)
-- 건강: 건강관리, 의약, 웰니스
-- 식단: 영양, 밀프렙, 건강식
-- 쇼핑: 핫딜, 신상품, 트렌드
-- 화장품: 뷰티, 스킨케어, 2026 SS
-- 의류: 패션, OOTD, ${seasonInfo}
-- 인플루언서: SNS 크리에이터 이슈
-- 셀럽: K-POP, 드라마, 연예인
-- 테크: AI, 가젯, 신기술
-- 재테크: 부업, 투자, AI 수익화
-- 시즌: ${seasonInfo}, 다가오는 공휴일/이벤트 (어린이날, 어버이날, 석가탄신일 등)
-- 글로벌: 미국/일본/유럽 트렌드, 해외 바이럴
-- 지혜: 철학적 명언, 종교적 가르침, 인생 지혜, 마음 수양, 명상
-- 연애: 남녀 연애 트렌드, 관계 심리, 데이트 문화, 성 관련 이슈, 글로벌 연애 뉴스, 커플 핫이슈
+각 항목 (실제 검색 결과만 사용):
+- title: 실제 트렌딩 키워드 또는 뉴스 제목 (20자 이내)
+- description: 왜 지금 핫한지 실제 사실 기반 (2문장)
+- traffic: 실제 추정 검색량 (예: 네이버 500K+)
+- views: 실제 SNS 조회수 (예: 유튜브 5M views)
+- category: 해당 카테고리
+- relatedQueries: 실제 연관 검색어 2개
 
-각 항목: title(20자이내), description(2문장), traffic(검색량), views(SNS조회수), category(위 카테고리명), relatedQueries([키워드2개])
+검증 필수: 각 항목이 실제 2026년 4월 트렌드인지 확인.
+추측 데이터 금지.
 
+JSON 배열만 반환:
 [{"title":"","description":"","traffic":"","views":"","category":"","relatedQueries":[""]}]`,
-      { temp: 0.9, max: 4096 }
+      { temp: 0.3, max: 6000, webSearch: true }
     );
 
     const arr = extractJson(text) as Record<string, unknown>[];

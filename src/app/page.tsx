@@ -48,7 +48,7 @@ export default function Dashboard() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold mb-1"><span className="gradient-text">오늘의 바이럴 트렌드</span></h1>
           <p className="text-foreground/40 text-sm">
-            카테고리별 SNS 조회수/트래픽 TOP 토픽
+            네이버/구글/유튜브 웹 검색 기반 실시간 트렌드
             {lastUpdated && <span className="ml-2 text-foreground/20">| 마지막 업데이트: {lastUpdated}</span>}
           </p>
         </div>
@@ -99,7 +99,7 @@ export default function Dashboard() {
           <button onClick={() => loadTrends(true)} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-bg border border-card-border text-xs text-foreground/50 hover:text-accent hover:border-accent/30 disabled:opacity-40">
             <span className={loading ? 'animate-spin' : ''}>&#8635;</span>
-            {loading ? '로딩 중...' : '새로 생성 (AI)'}
+            {loading ? '웹 검색 중... (30초~1분)' : '실시간 새로고침'}
           </button>
         </div>
 
