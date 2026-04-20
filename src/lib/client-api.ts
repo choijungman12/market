@@ -290,79 +290,49 @@ export async function generateHooks(
   tone: string, count = 3
 ) {
   const toneMap: Record<string, string> = { informative: '정보형', provocative: '자극형', storytelling: '스토리형' };
-  const todayKR = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   const thisMonth = `${new Date().getFullYear()}년 ${new Date().getMonth() + 1}월`;
 
   const text = await callClaude(
-    `당신은 한국 SNS 마케팅 전문 저널리스트입니다.
-오늘 날짜: ${todayKR}
+    `한국 SNS 마케팅 작가. 웹 검색으로 최신 팩트 수집 후 대본 작성.
 
-**절대 규칙 - 반드시 준수:**
+**중요 규칙:**
+- 설명 텍스트 금지. 검색 과정 설명 금지.
+- 검색 → 즉시 JSON만 출력
+- ${thisMonth} 이내 최신 뉴스만 사용
+- 한국어 오타 금지
 
-1. **최신성 필수**: ${thisMonth} 이내의 뉴스만 사용. 3개월 이상 오래된 자료 절대 금지.
-2. **2차 검증**: 웹 검색을 **최소 2라운드** 수행 (1차 수집 → 2차 교차검증)
-3. **날짜 명시**: 각 팩트는 뉴스 발행일을 확인 후 인용
-4. **구체성**: 숫자, 날짜, 법조항, 인명, 금액 등 검증 가능한 팩트만
+출력 형식: JSON 배열만. 다른 텍스트 절대 금지.`,
+    `"${topic.title}" 토픽 ${toneMap[tone] || tone} 톤 대본 ${count}개.
 
-**작업 순서 (엄격 준수):**
+웹 검색 2-3회로 ${thisMonth} 최신 팩트 수집 후,
+아래 JSON만 출력 (설명 금지, 코드블록 금지):
 
-[1라운드 검색]
-- "토픽명 ${thisMonth}" 검색
-- "토픽명 최신 뉴스" 검색
-- "토픽명 오늘" 또는 "이번주" 검색
-
-[2라운드 검증]
-- 1라운드에서 찾은 핵심 팩트를 다른 키워드로 교차 검색
-- 날짜, 숫자 확인
-- 서로 다른 2개 이상 매체에서 같은 팩트 확인
-
-[3단계 대본 작성]
-- 검증된 최신 팩트만 사용
-- 각 bodyPoint에 구체적 숫자 + 날짜 포함
-
-**출력**: 순수 JSON 배열만. 한국어 오타 절대 금지.`,
-    `토픽: "${topic.title}"
-설명: ${topic.description}
-톤: ${toneMap[tone] || tone}
-오늘: ${todayKR}
-
-**작업 (엄격):**
-
-[1라운드 - 최신 뉴스 수집]
-다음 검색을 순차 실행:
-1. "${topic.title} ${thisMonth}" 검색
-2. "${topic.title} 최신 뉴스 2026" 검색
-3. "${topic.title} 발표 ${new Date().getFullYear()}" 검색
-
-[2라운드 - 교차 검증]
-1라운드에서 찾은 가장 중요한 팩트 3-5개를 다른 키워드로 재검색:
-4. 팩트별 날짜 확인 (${thisMonth} 이내인지 검증)
-5. 다른 매체에서 동일 팩트 확인
-6. 숫자/금액/날짜 정확성 재확인
-
-[3단계 - 대본 ${count}개 작성]
-
-**각 대본 규칙:**
-- **팩트는 반드시 ${thisMonth} 이내 뉴스에서만 추출** (오래된 자료 절대 금지)
-- headline: 최신 뉴스의 핵심 (15자 이내)
-- subheadline: 날짜 또는 구체 수치 포함 (30자 이내)
-- bodyPoints: 5개, **각각 ${thisMonth} 뉴스 팩트 + 숫자 포함** (각 40자 이내)
-  - 예시 형식: "${thisMonth} 발표: [구체적 수치/내용]"
-- callToAction
-- targetAudience
-
-**금지 사항:**
-- 3개월 이상 오래된 자료 인용 (절대)
-- 검증 안 된 추측 정보
-- 숫자 없는 일반론
-
-**최종 출력:** JSON 배열만 (설명 금지, 코드블록 금지)
-
-[{"headline":"","subheadline":"","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`,
-    { temp: 0.3, max: 8000, webSearch: true }
+[
+  {
+    "headline": "후킹 제목 15자",
+    "subheadline": "구체수치/날짜 30자",
+    "bodyPoints": ["최신팩트1+숫자", "최신팩트2+숫자", "최신팩트3+숫자", "최신팩트4+숫자", "최신팩트5+숫자"],
+    "callToAction": "행동유도",
+    "targetAudience": "타겟"
+  }
+]`,
+    { temp: 0.3, max: 12000, webSearch: true }
   );
-  const p = extractJson(text);
-  return Array.isArray(p) ? p : [p];
+  try {
+    const p = extractJson(text);
+    return Array.isArray(p) ? p : [p];
+  } catch {
+    // 1차 실패 → 웹검색 없이 빠른 재시도
+    console.warn('[HookFlow] 후킹 1차 파싱 실패, 웹검색 없이 재시도');
+    const retryText = await callClaude(
+      'SNS 마케팅 작가. 순수 JSON 배열만. 설명 금지.',
+      `"${topic.title}" ${toneMap[tone] || tone} 대본 ${count}개. 형식:
+[{"headline":"15자","subheadline":"30자","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`,
+      { temp: 0.5, max: 3000 }
+    );
+    const p = extractJson(retryText);
+    return Array.isArray(p) ? p : [p];
+  }
 }
 
 // ===== SNS 이미지 대본 생성 (궁금증 유발 내러티브) =====
