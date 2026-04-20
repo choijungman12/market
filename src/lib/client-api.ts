@@ -522,6 +522,201 @@ export async function saveToHistory(entry: {
 
 export { getHistoryDB as getHistory, deleteHistoryDB as deleteHistory, clearHistoryDB as clearAllHistory };
 
+// ===== 바이럴 영상 분석 (카테고리별 TOP + 성능지표) =====
+export interface ViralVideo {
+  title: string;
+  channel: string;
+  views: number;
+  viewsStr: string;
+  engagementRate: number;
+  estimatedCPM: number;
+  estimatedRevenue: number;
+  viralSpeed: number;
+  region: string;
+  isShorts: boolean;
+  url?: string;
+  category: string;
+  hookPattern: 'question' | 'stats' | 'empathy' | 'visual' | 'story';
+  uploadDate: string;
+}
+
+export interface AnalysisReport {
+  date: string;
+  totalVideos: number;
+  categories: Record<string, ViralVideo[]>;
+  topCPM: ViralVideo[];
+  topEngagement: ViralVideo[];
+  topViralSpeed: ViralVideo[];
+  hookPatternDistribution: Record<string, number>;
+  regionDistribution: Record<string, number>;
+  shortsVsLong: { shorts: number; long: number };
+  nextWeekPredictions: { trend: string; growth: string; reason: string }[];
+  executiveSummary: string;
+}
+
+export async function generateAnalysisReport(): Promise<AnalysisReport> {
+  const today = new Date().toLocaleDateString('ko-KR');
+
+  const text = await callClaude(
+    `한국/글로벌 YouTube·SNS 바이럴 영상 분석 전문가.
+실제 웹 검색으로 최신 바이럴 영상 60개 조사 후 JSON으로 분석 결과 반환.
+설명 텍스트 금지. 순수 JSON만.`,
+    `오늘(${today}) 기준 글로벌 바이럴 영상 분석 보고서.
+
+카테고리 10개 (각 6개 영상):
+1. 철학_지혜 2. 지식_교육 3. 일상_라이프스타일 4. 웹툰_애니메이션 5. 아이교육
+6. 해외_바이럴 7. 자기계발 8. 재테크_경제 9. 건강_웰빙 10. 테크_IT
+
+웹 검색 2-3회로 실제 YouTube/TikTok 바이럴 영상 정보 수집.
+
+JSON 형식 (순수 JSON만, 설명 금지):
+{
+  "date": "${today}",
+  "totalVideos": 60,
+  "categories": {
+    "철학_지혜": [
+      {
+        "title": "실제 영상 제목",
+        "channel": "실제 채널명",
+        "views": 1500000,
+        "viewsStr": "1.5M",
+        "engagementRate": 8.5,
+        "estimatedCPM": 9.0,
+        "estimatedRevenue": 13500,
+        "viralSpeed": 300000,
+        "region": "KR",
+        "isShorts": true,
+        "category": "철학_지혜",
+        "hookPattern": "empathy",
+        "uploadDate": "2026-04-17"
+      }
+    ]
+  },
+  "topCPM": [],
+  "topEngagement": [],
+  "topViralSpeed": [],
+  "hookPatternDistribution": {"empathy": 28, "stats": 19, "question": 7, "visual": 6},
+  "regionDistribution": {"US": 37, "KR": 17, "JP": 3, "IN": 2, "EU": 1},
+  "shortsVsLong": {"shorts": 26, "long": 34},
+  "nextWeekPredictions": [
+    {"trend": "Physical AI & 휴머노이드 로봇", "growth": "+35%", "reason": "CES 2026 여파 지속"},
+    {"trend": "재테크/크립토 컴백", "growth": "+28%", "reason": "코스피 신고가 기대감"}
+  ],
+  "executiveSummary": "오늘의 핵심 요약 3-5문장"
+}`,
+    { temp: 0.4, max: 16000, webSearch: true }
+  );
+
+  try {
+    return extractJson(text) as AnalysisReport;
+  } catch {
+    // 재시도 (웹검색 없이)
+    const retry = await callClaude(
+      '바이럴 영상 분석가. 순수 JSON만 반환.',
+      `카테고리 10개 × 6개 영상 = 60개의 바이럴 분석 JSON 생성.
+형식: {"date":"${today}","totalVideos":60,"categories":{"철학_지혜":[{"title":"","channel":"","views":0,"viewsStr":"","engagementRate":0,"estimatedCPM":0,"estimatedRevenue":0,"viralSpeed":0,"region":"US","isShorts":true,"category":"철학_지혜","hookPattern":"empathy","uploadDate":""}]},"topCPM":[],"topEngagement":[],"topViralSpeed":[],"hookPatternDistribution":{},"regionDistribution":{},"shortsVsLong":{"shorts":0,"long":0},"nextWeekPredictions":[{"trend":"","growth":"","reason":""}],"executiveSummary":""}`,
+      { temp: 0.5, max: 12000 }
+    );
+    return extractJson(retry) as AnalysisReport;
+  }
+}
+
+// ===== SEO 패키지 생성 (제목/설명/해시태그) =====
+export interface SEOPackage {
+  titles: string[];  // SEO 최적화된 제목 3개
+  description: string;  // YouTube/SNS 설명글
+  hashtags: string[];  // 해시태그 15개
+  tags: string[];  // YouTube 태그 20개
+  thumbnailText: string;  // 썸네일 텍스트
+  optimalPostTime: string;  // 최적 업로드 시간
+  platforms: {
+    youtube: { title: string; description: string };
+    instagram: { caption: string; hashtags: string };
+    tiktok: { caption: string; hashtags: string };
+    facebook: { post: string };
+  };
+}
+
+export async function generateSEOPackage(
+  topic: string,
+  platform: 'youtube' | 'instagram' | 'tiktok' | 'facebook' = 'instagram'
+): Promise<SEOPackage> {
+  const text = await callClaude(
+    'SNS/YouTube SEO 전문가. 한국어. 오타금지. JSON만.',
+    `"${topic}" 주제 SEO 패키지 생성.
+
+JSON 형식:
+{
+  "titles": ["SEO제목1 (70자 내)", "SEO제목2", "SEO제목3"],
+  "description": "SNS/YouTube 설명글 (150-200자, 키워드+해시태그 포함)",
+  "hashtags": ["#태그1", "#태그2", ... 15개],
+  "tags": ["태그1", "태그2", ... 20개],
+  "thumbnailText": "썸네일 문구 (5-10자)",
+  "optimalPostTime": "최적 업로드 시간 (예: 월-금 저녁 7-9시)",
+  "platforms": {
+    "youtube": {"title": "YouTube 최적화 제목", "description": "YouTube 설명"},
+    "instagram": {"caption": "IG 캡션 (짧고 감성적)", "hashtags": "#태그 나열"},
+    "tiktok": {"caption": "TikTok 캡션 (fyp 유도)", "hashtags": "#fyp #추천"},
+    "facebook": {"post": "FB 포스트 내용"}
+  }
+}`,
+    { temp: 0.6, max: 3000 }
+  );
+
+  return extractJson(text) as SEOPackage;
+}
+
+// ===== 종합 보고서 Markdown 다운로드 =====
+export function reportToMarkdown(report: AnalysisReport): string {
+  let md = `# 일일 바이럴 영상 분석 보고서\n\n`;
+  md += `**${report.date}** · 카테고리: ${Object.keys(report.categories).length}개 · 분석 영상: ${report.totalVideos}개\n\n---\n\n`;
+
+  md += `## 📊 핵심 요약\n\n${report.executiveSummary}\n\n---\n\n`;
+
+  md += `## 1️⃣ 카테고리별 트렌딩 영상\n\n`;
+  for (const [cat, videos] of Object.entries(report.categories)) {
+    md += `### ${cat.replace('_', '/')}\n\n`;
+    md += `| 순위 | 제목 | 채널 | 조회수 | 참여율 | CPM | 수익 |\n|---|---|---|---|---|---|---|\n`;
+    videos.forEach((v, i) => {
+      md += `| ${i+1} | ${v.title} | ${v.channel} | ${v.viewsStr} | ${v.engagementRate}% | $${v.estimatedCPM} | $${v.estimatedRevenue.toLocaleString()} |\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `\n## 2️⃣ 성과 분석\n\n### 💰 CPM TOP 10\n\n`;
+  md += `| 순위 | 제목 | 카테고리 | CPM | 예상 수익 |\n|---|---|---|---|---|\n`;
+  report.topCPM.slice(0, 10).forEach((v, i) => {
+    md += `| ${i+1} | ${v.title} | ${v.category} | $${v.estimatedCPM} | $${v.estimatedRevenue.toLocaleString()} |\n`;
+  });
+
+  md += `\n### 🚀 바이럴 속도 TOP 10\n\n`;
+  md += `| 순위 | 제목 | 일평균 조회수 | 카테고리 |\n|---|---|---|---|\n`;
+  report.topViralSpeed.slice(0, 10).forEach((v, i) => {
+    md += `| ${i+1} | ${v.title} | ${v.viralSpeed.toLocaleString()}/day | ${v.category} |\n`;
+  });
+
+  md += `\n## 3️⃣ 콘텐츠 구조 분석\n\n### 🎣 Hook 패턴 분포\n\n`;
+  for (const [pattern, count] of Object.entries(report.hookPatternDistribution)) {
+    md += `- **${pattern}**: ${count}개\n`;
+  }
+
+  md += `\n### 📱 Shorts vs 장편\n\n`;
+  md += `- Shorts: ${report.shortsVsLong.shorts}개\n- 장편: ${report.shortsVsLong.long}개\n`;
+
+  md += `\n### 🌍 지역 분포\n\n`;
+  for (const [region, count] of Object.entries(report.regionDistribution)) {
+    md += `- ${region}: ${count}개\n`;
+  }
+
+  md += `\n## 4️⃣ 다음 주 트렌드 예측\n\n`;
+  report.nextWeekPredictions.forEach((p, i) => {
+    md += `**${i+1}. ${p.trend}** (${p.growth})\n${p.reason}\n\n`;
+  });
+
+  md += `\n---\n\n*Generated by HookFlow AI · ${new Date().toISOString()}*\n`;
+  return md;
+}
+
 // ===== 랜딩 페이지 HTML =====
 export async function generateLandingHtml(data: {
   heroTitle: string; heroSubtitle: string;

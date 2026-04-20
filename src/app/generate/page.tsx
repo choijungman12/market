@@ -6,7 +6,8 @@ import Navbar from '@/components/Navbar';
 import Stepper from '@/components/Stepper';
 import {
   generateHooks, generateCarouselSlides, generateSlideImages, regenerateSingleImage,
-  getActiveProvider, hasGeminiKey, saveToHistory,
+  generateSEOPackage, getActiveProvider, hasGeminiKey, saveToHistory,
+  type SEOPackage,
 } from '@/lib/client-api';
 import type { HookContent, CarouselSet, WorkflowStep } from '@/types';
 
@@ -210,6 +211,23 @@ export default function GeneratePage() {
     if (!carousel) return;
     for (let i = 0; i < carousel.generatedImages.length; i++) {
       if (carousel.generatedImages[i]) { downloadImage(i); await new Promise(r => setTimeout(r, 500)); }
+    }
+  }
+
+  // SEO 패키지
+  const [seoPackage, setSeoPackage] = useState<SEOPackage | null>(null);
+  const [seoLoading, setSeoLoading] = useState(false);
+
+  async function genSEO() {
+    if (!selectedHook) return;
+    setSeoLoading(true);
+    try {
+      const seo = await generateSEOPackage(selectedHook.headline, platform);
+      setSeoPackage(seo);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'SEO 생성 실패');
+    } finally {
+      setSeoLoading(false);
     }
   }
 
@@ -494,19 +512,85 @@ export default function GeneratePage() {
                 className="py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 text-white font-bold text-sm hover:opacity-90">
                 전체 다운로드
               </button>
-              <button onClick={() => alert('SNS 연동은 다음 업데이트에서 제공됩니다.\n\n현재는 이미지를 다운로드 후 직접 업로드해주세요.')}
-                className="py-3 rounded-xl bg-card-bg border border-accent/30 text-accent font-medium text-sm hover:bg-accent/10">
-                SNS 올리기
+              <button onClick={genSEO} disabled={seoLoading}
+                className="py-3 rounded-xl bg-card-bg border border-accent/30 text-accent font-medium text-sm hover:bg-accent/10 disabled:opacity-50">
+                {seoLoading ? 'SEO 생성중...' : '🎯 SEO 패키지'}
               </button>
-              <button onClick={() => alert('예약 발행 기능은 다음 업데이트에서 제공됩니다.')}
+              <button onClick={() => alert('SNS 자동 업로드 기능 개발 중입니다.\n\n현재는 다운로드 후 직접 업로드해주세요.\nSEO 패키지의 제목/해시태그를 복사해서 사용하세요.')}
                 className="py-3 rounded-xl bg-card-bg border border-card-border text-foreground/70 font-medium text-sm hover:border-accent/30">
-                예약 발행
+                SNS 올리기
               </button>
               <button onClick={doGenImages} disabled={loading}
                 className="py-3 rounded-xl bg-card-bg border border-card-border text-foreground/70 font-medium text-sm hover:border-accent/30 disabled:opacity-50">
                 다시 생성
               </button>
             </div>
+
+            {/* SEO 패키지 결과 */}
+            {seoPackage && (
+              <div className="p-5 rounded-xl bg-gradient-to-br from-accent/5 to-purple-500/5 border border-accent/30 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-accent">🎯 SEO 패키지</h3>
+                  <button onClick={() => setSeoPackage(null)} className="text-foreground/40 hover:text-foreground text-sm">✕</button>
+                </div>
+
+                <div>
+                  <label className="text-xs text-foreground/50 font-bold mb-1 block">📝 추천 제목 3개</label>
+                  <div className="space-y-1.5">
+                    {seoPackage.titles.map((t, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-xs text-accent font-bold w-4">{i+1}.</span>
+                        <input readOnly value={t} className="flex-1 px-3 py-1.5 rounded bg-background text-xs border border-card-border" />
+                        <button onClick={() => navigator.clipboard.writeText(t)} className="text-[10px] text-accent px-2 py-1">복사</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-foreground/50 font-bold mb-1 block">📄 설명글</label>
+                  <textarea readOnly value={seoPackage.description}
+                    className="w-full px-3 py-2 rounded bg-background text-xs border border-card-border" rows={3} />
+                  <button onClick={() => navigator.clipboard.writeText(seoPackage.description)} className="mt-1 text-[10px] text-accent">복사</button>
+                </div>
+
+                <div>
+                  <label className="text-xs text-foreground/50 font-bold mb-1 block">#️⃣ 해시태그</label>
+                  <div className="flex flex-wrap gap-1">
+                    {seoPackage.hashtags.map((h, i) => (
+                      <span key={i} className="px-2 py-0.5 rounded bg-accent/10 text-accent text-xs">{h}</span>
+                    ))}
+                  </div>
+                  <button onClick={() => navigator.clipboard.writeText(seoPackage.hashtags.join(' '))} className="mt-2 text-[10px] text-accent">전체 복사</button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded bg-background/50">
+                    <div className="text-[10px] text-foreground/50 font-bold mb-1">🎬 썸네일 문구</div>
+                    <div className="font-bold">{seoPackage.thumbnailText}</div>
+                  </div>
+                  <div className="p-3 rounded bg-background/50">
+                    <div className="text-[10px] text-foreground/50 font-bold mb-1">⏰ 최적 업로드 시간</div>
+                    <div>{seoPackage.optimalPostTime}</div>
+                  </div>
+                </div>
+
+                {/* 플랫폼별 */}
+                <details className="p-3 rounded bg-background/50">
+                  <summary className="text-xs font-bold text-foreground/70 cursor-pointer">플랫폼별 최적화</summary>
+                  <div className="mt-3 space-y-3 text-xs">
+                    {Object.entries(seoPackage.platforms).map(([pf, data]) => (
+                      <div key={pf} className="border-t border-card-border pt-2">
+                        <div className="font-bold capitalize text-accent mb-1">{pf}</div>
+                        {Object.entries(data as Record<string, string>).map(([k, v]) => (
+                          <div key={k}><span className="text-foreground/40">{k}: </span>{v}</div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
 
             {/* 대본 확인 */}
             <details className="rounded-xl bg-card-bg border border-card-border" open>

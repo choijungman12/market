@@ -7,6 +7,7 @@ import { getActiveProvider, hasGeminiKey } from '@/lib/client-api';
 
 const navItems = [
   { href: '/', label: '트렌드', icon: '📊' },
+  { href: '/analysis', label: '분석', icon: '📈' },
   { href: '/generate', label: '생성', icon: '🚀' },
   { href: '/custom', label: '커스텀', icon: '✏' },
   { href: '/history', label: '히스토리', icon: '📋' },
