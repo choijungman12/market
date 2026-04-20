@@ -35,7 +35,7 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
   };
 
   if (opts.webSearch) {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 10 }];
   }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -285,26 +285,64 @@ export async function generateHooks(
 ) {
   const toneMap: Record<string, string> = { informative: '정보형', provocative: '자극형', storytelling: '스토리형' };
   const text = await callClaude(
-    `한국 SNS 마케팅 전문가. 웹 검색으로 최신 팩트 수집 후 대본 작성. 한국어 맞춤법 완벽. 마지막에 반드시 순수 JSON 배열만 출력.`,
+    `당신은 한국 SNS 마케팅 전문 저널리스트입니다.
+
+**반드시 준수할 작업 순서:**
+
+1단계 - 심층 웹 검색 (필수 3-5회):
+   - 토픽 관련 **최신 뉴스 기사**를 검색 (조선일보/중앙일보/한겨레/연합뉴스 등 주요 매체)
+   - **구체적 숫자, 날짜, 법조항, 관련자 이름, 처벌 수위** 등 팩트 수집
+   - 관련 **통계, 조사 결과, 정부 발표** 검색
+   - **최근 7일 이내** 뉴스 우선
+
+2단계 - 핵심 팩트 추출:
+   - 검색 결과에서 **가장 충격적이거나 중요한 팩트 10개 이상** 추출
+   - 숫자(과태료 금액, 적발 건수, 기간 등) 정확히 기록
+   - 뉴스 출처 확인
+
+3단계 - 대본 작성:
+   - 추출한 팩트를 기반으로 SNS 후킹 대본 작성
+   - **각 bodyPoint에 최소 1개 이상의 구체적 숫자/사실 포함** 필수
+   - 추측/일반론 금지, 검색된 실제 정보만 사용
+   - 한국어 맞춤법 100% 정확
+
+**출력 규칙:**
+- 한국어 오타 절대 금지 (출력 전 검토)
+- 마지막에 반드시 순수 JSON 배열만 (설명 텍스트 금지, 코드블록 금지)`,
     `토픽: "${topic.title}"
 설명: ${topic.description}
 톤: ${toneMap[tone] || tone}
 
-작업:
-1. 웹 검색으로 이 토픽의 최신 팩트/데이터/뉴스 수집
-2. 검색 결과 기반으로 후킹 대본 ${count}개 작성
+**작업 지시:**
 
-각 대본 필드:
-- headline: 후킹 제목 (15자 이내)
-- subheadline: 부제목 (30자 이내)
-- bodyPoints: 핵심 5개 배열 (각 40자 이내, 실제 팩트 포함)
-- callToAction: CTA
+1. 웹 검색으로 "${topic.title}"에 대한 최신 뉴스 기사 3-5개 이상 조사:
+   - 관련 법/제도의 구체적 내용
+   - 적발/처벌 사례, 과태료 금액
+   - 최근 정부 발표 및 조사 결과
+   - 관련 통계 및 숫자
+
+2. 검색 결과에서 핵심 팩트를 추출 (숫자, 날짜, 금액, 법조항, 사례 등)
+
+3. 추출한 실제 팩트 기반으로 ${count}개의 SNS 후킹 대본 작성:
+
+**각 대본 필드 (엄격):**
+- headline: 실제 뉴스의 가장 충격적 요소를 15자 이내로 (예: "농지 적발 1천만원 과태료")
+- subheadline: 구체적 팩트 포함 30자 이내 (예: "2026년 전수조사 5천명 조사관 투입")
+- bodyPoints: 5개 배열, **각각 실제 숫자/사실 포함** (각 40자 이내)
+   - 예: "농지 전용 무단개발 → 원상복구 명령 + 3천만원 과태료"
+   - 예: "비농업인 농지 구매 적발 시 8년 이하 징역 또는 1억원 벌금"
+- callToAction: 행동 유도
 - targetAudience: 타겟
 
-중요: 최종 출력은 반드시 아래 JSON 배열 형식으로만. 다른 설명 텍스트 금지.
+**절대 금지:**
+- 추측/일반론 작성 ("많은 사람들이...", "최근에...")
+- 구체적 숫자 없는 bodyPoint
+- 출처 불명 정보
 
-[{"headline":"...","subheadline":"...","bodyPoints":["...","...","...","...","..."],"callToAction":"...","targetAudience":"..."}]`,
-    { temp: 0.7, max: 8000, webSearch: true }
+**최종 출력:** 순수 JSON 배열만. 다른 텍스트 금지.
+
+[{"headline":"","subheadline":"","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`,
+    { temp: 0.5, max: 12000, webSearch: true }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
