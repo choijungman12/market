@@ -36,7 +36,7 @@ export default function GeneratePage() {
   // Step 2: 대본 생성
   async function doGenHooks() {
     if (!topic || getActiveProvider() === 'none') { setError('설정에서 API 키를 입력해주세요.'); return; }
-    setLoading(true); setLoadingMsg('웹에서 최신 정보 검색 중... 정확한 팩트 기반 대본 작성'); setError(null);
+    setLoading(true); setLoadingMsg('웹 검색 1라운드 → 2라운드 교차검증 → 최신 팩트 기반 대본 작성 중...'); setError(null);
     try {
       const result = await generateHooks(topic, tone, 3);
       setHooks(result.map((h: Record<string, unknown>, i: number) => ({

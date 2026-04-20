@@ -35,7 +35,7 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
   };
 
   if (opts.webSearch) {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 10 }];
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 15 }];
   }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -284,65 +284,76 @@ export async function generateHooks(
   tone: string, count = 3
 ) {
   const toneMap: Record<string, string> = { informative: '정보형', provocative: '자극형', storytelling: '스토리형' };
+  const todayKR = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  const thisMonth = `${new Date().getFullYear()}년 ${new Date().getMonth() + 1}월`;
+
   const text = await callClaude(
     `당신은 한국 SNS 마케팅 전문 저널리스트입니다.
+오늘 날짜: ${todayKR}
 
-**반드시 준수할 작업 순서:**
+**절대 규칙 - 반드시 준수:**
 
-1단계 - 심층 웹 검색 (필수 3-5회):
-   - 토픽 관련 **최신 뉴스 기사**를 검색 (조선일보/중앙일보/한겨레/연합뉴스 등 주요 매체)
-   - **구체적 숫자, 날짜, 법조항, 관련자 이름, 처벌 수위** 등 팩트 수집
-   - 관련 **통계, 조사 결과, 정부 발표** 검색
-   - **최근 7일 이내** 뉴스 우선
+1. **최신성 필수**: ${thisMonth} 이내의 뉴스만 사용. 3개월 이상 오래된 자료 절대 금지.
+2. **2차 검증**: 웹 검색을 **최소 2라운드** 수행 (1차 수집 → 2차 교차검증)
+3. **날짜 명시**: 각 팩트는 뉴스 발행일을 확인 후 인용
+4. **구체성**: 숫자, 날짜, 법조항, 인명, 금액 등 검증 가능한 팩트만
 
-2단계 - 핵심 팩트 추출:
-   - 검색 결과에서 **가장 충격적이거나 중요한 팩트 10개 이상** 추출
-   - 숫자(과태료 금액, 적발 건수, 기간 등) 정확히 기록
-   - 뉴스 출처 확인
+**작업 순서 (엄격 준수):**
 
-3단계 - 대본 작성:
-   - 추출한 팩트를 기반으로 SNS 후킹 대본 작성
-   - **각 bodyPoint에 최소 1개 이상의 구체적 숫자/사실 포함** 필수
-   - 추측/일반론 금지, 검색된 실제 정보만 사용
-   - 한국어 맞춤법 100% 정확
+[1라운드 검색]
+- "토픽명 ${thisMonth}" 검색
+- "토픽명 최신 뉴스" 검색
+- "토픽명 오늘" 또는 "이번주" 검색
 
-**출력 규칙:**
-- 한국어 오타 절대 금지 (출력 전 검토)
-- 마지막에 반드시 순수 JSON 배열만 (설명 텍스트 금지, 코드블록 금지)`,
+[2라운드 검증]
+- 1라운드에서 찾은 핵심 팩트를 다른 키워드로 교차 검색
+- 날짜, 숫자 확인
+- 서로 다른 2개 이상 매체에서 같은 팩트 확인
+
+[3단계 대본 작성]
+- 검증된 최신 팩트만 사용
+- 각 bodyPoint에 구체적 숫자 + 날짜 포함
+
+**출력**: 순수 JSON 배열만. 한국어 오타 절대 금지.`,
     `토픽: "${topic.title}"
 설명: ${topic.description}
 톤: ${toneMap[tone] || tone}
+오늘: ${todayKR}
 
-**작업 지시:**
+**작업 (엄격):**
 
-1. 웹 검색으로 "${topic.title}"에 대한 최신 뉴스 기사 3-5개 이상 조사:
-   - 관련 법/제도의 구체적 내용
-   - 적발/처벌 사례, 과태료 금액
-   - 최근 정부 발표 및 조사 결과
-   - 관련 통계 및 숫자
+[1라운드 - 최신 뉴스 수집]
+다음 검색을 순차 실행:
+1. "${topic.title} ${thisMonth}" 검색
+2. "${topic.title} 최신 뉴스 2026" 검색
+3. "${topic.title} 발표 ${new Date().getFullYear()}" 검색
 
-2. 검색 결과에서 핵심 팩트를 추출 (숫자, 날짜, 금액, 법조항, 사례 등)
+[2라운드 - 교차 검증]
+1라운드에서 찾은 가장 중요한 팩트 3-5개를 다른 키워드로 재검색:
+4. 팩트별 날짜 확인 (${thisMonth} 이내인지 검증)
+5. 다른 매체에서 동일 팩트 확인
+6. 숫자/금액/날짜 정확성 재확인
 
-3. 추출한 실제 팩트 기반으로 ${count}개의 SNS 후킹 대본 작성:
+[3단계 - 대본 ${count}개 작성]
 
-**각 대본 필드 (엄격):**
-- headline: 실제 뉴스의 가장 충격적 요소를 15자 이내로 (예: "농지 적발 1천만원 과태료")
-- subheadline: 구체적 팩트 포함 30자 이내 (예: "2026년 전수조사 5천명 조사관 투입")
-- bodyPoints: 5개 배열, **각각 실제 숫자/사실 포함** (각 40자 이내)
-   - 예: "농지 전용 무단개발 → 원상복구 명령 + 3천만원 과태료"
-   - 예: "비농업인 농지 구매 적발 시 8년 이하 징역 또는 1억원 벌금"
-- callToAction: 행동 유도
-- targetAudience: 타겟
+**각 대본 규칙:**
+- **팩트는 반드시 ${thisMonth} 이내 뉴스에서만 추출** (오래된 자료 절대 금지)
+- headline: 최신 뉴스의 핵심 (15자 이내)
+- subheadline: 날짜 또는 구체 수치 포함 (30자 이내)
+- bodyPoints: 5개, **각각 ${thisMonth} 뉴스 팩트 + 숫자 포함** (각 40자 이내)
+  - 예시 형식: "${thisMonth} 발표: [구체적 수치/내용]"
+- callToAction
+- targetAudience
 
-**절대 금지:**
-- 추측/일반론 작성 ("많은 사람들이...", "최근에...")
-- 구체적 숫자 없는 bodyPoint
-- 출처 불명 정보
+**금지 사항:**
+- 3개월 이상 오래된 자료 인용 (절대)
+- 검증 안 된 추측 정보
+- 숫자 없는 일반론
 
-**최종 출력:** 순수 JSON 배열만. 다른 텍스트 금지.
+**최종 출력:** JSON 배열만 (설명 금지, 코드블록 금지)
 
 [{"headline":"","subheadline":"","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`,
-    { temp: 0.5, max: 12000, webSearch: true }
+    { temp: 0.3, max: 16000, webSearch: true }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
