@@ -68,24 +68,56 @@ export default function GeneratePage() {
         bodyPoints: hook.bodyPoints || [],
         callToAction: hook.callToAction,
       }, slideCount);
-      setEditingScripts((slides as Record<string, unknown>[]).map(s => ({
-        title: String(s.title || ''),
-        subtitle: String(s.subtitle || ''),
-        body: String(s.body || ''),
-        imagePrompt: String(s.imagePrompt || ''),
-        textEmphasis: String(s.textEmphasis || ''),
-        colorScheme: String(s.colorScheme || ''),
-        emotion: String(s.emotion || ''),
-        type: String(s.type || ''),
-      })));
+      const topicKey = hook.headline + ' ' + hook.subheadline;
+      setEditingScripts((slides as Record<string, unknown>[]).map((s, i) => {
+        const title = String(s.title || '');
+        const subtitle = String(s.subtitle || '');
+        const body = String(s.body || '');
+        const stageName = String(s.type || (i === 0 ? 'Hook' : i === slides.length - 1 ? 'CTA' : 'Content'));
+
+        // AI가 imagePrompt 안 넣었으면 주제 기반 자동 생성
+        const autoImagePrompt = `한국 ${topicKey} 주제. 장면: ${body}. 인물: 30대 한국인. 스타일: realistic photo, cinematic, 4k, DSLR quality. 느낌: ${stageName === 'Hook' ? '충격' : stageName === 'CTA' ? '결심' : '진지함'}`;
+
+        return {
+          title,
+          subtitle,
+          body,
+          imagePrompt: String(s.imagePrompt || '') || autoImagePrompt,
+          textEmphasis: String(s.textEmphasis || '') || title,
+          colorScheme: String(s.colorScheme || '') || '다크 + 보라 액센트',
+          emotion: String(s.emotion || '') || (stageName === 'Hook' ? '궁금증 유발' : '공감'),
+          type: stageName,
+        };
+      }));
     } catch (e) {
-      setEditingScripts((hook.bodyPoints || []).map((p, i) => ({
-        title: i === 0 ? hook.headline : `${i+1}. 핵심 포인트`,
-        subtitle: i === 0 ? hook.subheadline : '상세 내용',
-        body: p,
-        imagePrompt: '', textEmphasis: '', colorScheme: '', emotion: '',
-        type: i === 0 ? 'Hook' : i === (hook.bodyPoints?.length || 0) - 1 ? 'CTA' : 'Content',
-      })));
+      // AI 생성 실패 (Rate limit 등) → 주제/본문 기반 스마트 폴백
+      setError(`AI 대본 생성 실패로 자동 폴백 사용 중: ${e instanceof Error ? e.message : ''}. 1-2분 후 "다른 대본 선택" 후 재시도 가능.`);
+      const topicKey = hook.headline + ' ' + hook.subheadline;
+      const total = hook.bodyPoints?.length || 5;
+      setEditingScripts((hook.bodyPoints || []).map((p, i) => {
+        const isFirst = i === 0;
+        const isLast = i === total - 1;
+        const stageName = isFirst ? 'Hook' : isLast ? 'CTA' : i === 1 ? 'Proof' : i === 2 ? 'Differentiation' : 'Result';
+
+        // 주제/본문 기반 이미지 프롬프트 자동 생성
+        const imagePrompt = `한국 ${topicKey} 주제에 맞는 사실적 장면.
+장면: ${p}
+인물: 30대 한국인, 해당 주제와 관련된 표정/상황
+장소: ${p.includes('헬스') || p.includes('운동') ? '헬스장' : p.includes('투자') || p.includes('주식') ? '사무실/카페' : p.includes('음식') || p.includes('식단') ? '주방/식당' : '실내 공간'}
+스타일: realistic photo, cinematic lighting, 4k, DSLR quality
+느낌: ${stageName === 'Hook' ? '충격과 놀람' : stageName === 'CTA' ? '결심과 동기부여' : '진지함과 신뢰'}`;
+
+        return {
+          title: isFirst ? hook.headline : p.length > 15 ? p.slice(0, 15) : p,
+          subtitle: isFirst ? hook.subheadline : `${stageName}: 핵심 포인트`,
+          body: p,
+          imagePrompt,
+          textEmphasis: isFirst ? hook.headline : p.slice(0, 20),
+          colorScheme: isFirst ? '강렬한 레드+블랙' : isLast ? '밝은 오렌지+화이트' : '차분한 다크+보라',
+          emotion: stageName === 'Hook' ? '나도 해볼까?' : stageName === 'CTA' ? '지금 시작!' : '그럴 수 있네',
+          type: stageName,
+        };
+      }));
     } finally {
       setLoading(false);
     }
