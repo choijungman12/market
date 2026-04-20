@@ -19,7 +19,7 @@ export default function GeneratePage() {
   const [tone, setTone] = useState('provocative');
   const [hooks, setHooks] = useState<HookContent[]>([]);
   const [selectedHook, setSelectedHook] = useState<HookContent | null>(null);
-  const [editingScripts, setEditingScripts] = useState<{ title: string; body: string }[]>([]);
+  const [editingScripts, setEditingScripts] = useState<{ title: string; subtitle: string; body: string; example?: string }[]>([]);
   const [carousel, setCarousel] = useState<CarouselSet | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
@@ -47,22 +47,44 @@ export default function GeneratePage() {
     finally { setLoading(false); }
   }
 
-  // 대본 선택 → 편집 모드
-  function selectHook(hook: HookContent) {
+  // 대본 선택 → AI로 풍부한 대본 자동 생성
+  async function selectHook(hook: HookContent) {
     setSelectedHook(hook);
-    setEditingScripts((hook.bodyPoints || []).map((p, i) => ({
-      title: i === 0 ? hook.headline : `${i+1}. ${p.slice(0, 20)}`,
-      body: i === 0 ? hook.subheadline : p,
-    })));
+    setLoading(true);
+    setLoadingMsg('AI가 각 장면별 상세 대본을 작성 중... (제목/부제목/본문/예시)');
+    try {
+      const slides = await generateCarouselSlides({
+        headline: hook.headline,
+        subheadline: hook.subheadline,
+        bodyPoints: hook.bodyPoints || [],
+        callToAction: hook.callToAction,
+      }, slideCount);
+      setEditingScripts((slides as Record<string, unknown>[]).map(s => ({
+        title: String(s.title || ''),
+        subtitle: String(s.subtitle || ''),
+        body: String(s.body || ''),
+        example: String(s.example || ''),
+      })));
+    } catch (e) {
+      // 실패 시 기본값 사용
+      setEditingScripts((hook.bodyPoints || []).map((p, i) => ({
+        title: i === 0 ? hook.headline : `${i+1}. 핵심 포인트`,
+        subtitle: i === 0 ? hook.subheadline : '상세 내용',
+        body: p,
+        example: '',
+      })));
+    } finally {
+      setLoading(false);
+    }
   }
 
   // 대본 편집
-  function updateScript(index: number, field: 'title' | 'body', value: string) {
+  function updateScript(index: number, field: 'title' | 'subtitle' | 'body' | 'example', value: string) {
     setEditingScripts(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
   }
 
   // 대본 추가/삭제
-  function addScript() { setEditingScripts(prev => [...prev, { title: '새 장면', body: '내용을 입력하세요' }]); }
+  function addScript() { setEditingScripts(prev => [...prev, { title: '새 장면', subtitle: '부제목', body: '내용을 입력하세요', example: '' }]); }
   function removeScript(index: number) { if (editingScripts.length > 2) setEditingScripts(prev => prev.filter((_, i) => i !== index)); }
 
   // Step 3: 이미지 생성
@@ -74,7 +96,7 @@ export default function GeneratePage() {
       const slides = editingScripts.map((s, i) => ({
         id: `slide_${i+1}`, order: i+1,
         type: i === 0 ? 'cover' : i === editingScripts.length - 1 ? 'cta' : 'content',
-        title: s.title, body: s.body, bullets: [],
+        title: s.title, subtitle: s.subtitle, body: s.body, example: s.example, bullets: [],
         bgColor: '#0F172A', textColor: '#F8FAFC', accentColor: '#818CF8',
       }));
 
@@ -247,21 +269,52 @@ export default function GeneratePage() {
                   <button onClick={() => { setSelectedHook(null); setEditingScripts([]); }} className="text-xs text-foreground/40">다른 대본 선택</button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {editingScripts.map((script, i) => (
-                    <div key={i} className="p-4 rounded-xl bg-card-bg border border-card-border group">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs font-bold ${i === 0 ? 'text-accent' : 'text-foreground/40'}`}>
-                          {i === 0 ? '메인 (어그로)' : `${i + 1}장`}
-                        </span>
+                    <div key={i} className={`p-5 rounded-xl bg-card-bg border group ${i === 0 ? 'border-accent/50' : 'border-card-border'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-accent text-white' : 'bg-card-border text-foreground/50'}`}>{i+1}</span>
+                          <span className={`text-xs font-bold ${i === 0 ? 'text-accent' : 'text-foreground/40'}`}>
+                            {i === 0 ? '메인 (어그로 - 스크롤 멈추게!)' : i === editingScripts.length - 1 ? '마지막 (CTA)' : `${i + 1}장`}
+                          </span>
+                        </div>
                         {editingScripts.length > 2 && (
                           <button onClick={() => removeScript(i)} className="text-xs text-danger/50 hover:text-danger opacity-0 group-hover:opacity-100">삭제</button>
                         )}
                       </div>
-                      <input type="text" value={script.title} onChange={e => updateScript(i, 'title', e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm font-bold mb-2 focus:outline-none focus:border-accent" placeholder="제목" />
-                      <textarea value={script.body} onChange={e => updateScript(i, 'body', e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm resize-none focus:outline-none focus:border-accent" rows={2} placeholder="본문" />
+
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="text-[10px] text-accent font-bold mb-1 block">제목 (10-15자)</label>
+                          <input type="text" value={script.title} onChange={e => updateScript(i, 'title', e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm font-bold focus:outline-none focus:border-accent"
+                            placeholder="짧고 임팩트 있는 제목" />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-foreground/50 font-bold mb-1 block">부제목 (20-30자)</label>
+                          <input type="text" value={script.subtitle} onChange={e => updateScript(i, 'subtitle', e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm focus:outline-none focus:border-accent"
+                            placeholder="궁금증을 유발하는 부제목" />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-foreground/50 font-bold mb-1 block">본문 (80-150자, 초보자도 이해 가능하게 예시 포함)</label>
+                          <textarea value={script.body} onChange={e => updateScript(i, 'body', e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-sm resize-none focus:outline-none focus:border-accent" rows={3}
+                            placeholder="상세 내용 (예시, 비유, 숫자 포함)" />
+                        </div>
+
+                        {(script.example || script.example === '') && (
+                          <div>
+                            <label className="text-[10px] text-foreground/30 font-bold mb-1 block">예시/팁 (선택)</label>
+                            <input type="text" value={script.example || ''} onChange={e => updateScript(i, 'example', e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-background border border-card-border text-xs text-foreground/70 focus:outline-none focus:border-accent"
+                              placeholder="예: 실제 사례, 팁, 추가 정보" />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -339,13 +392,36 @@ export default function GeneratePage() {
             </div>
 
             {/* 대본 확인 */}
-            <details className="rounded-xl bg-card-bg border border-card-border">
+            <details className="rounded-xl bg-card-bg border border-card-border" open>
               <summary className="p-4 text-sm font-bold text-foreground/70 cursor-pointer">대본 확인 ({carousel.slides.length}컷)</summary>
-              <div className="px-4 pb-4 space-y-2">
+              <div className="px-4 pb-4 space-y-4">
                 {editingScripts.map((s, i) => (
-                  <div key={i} className="flex gap-3 text-sm">
-                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 0 ? 'bg-accent text-white' : 'bg-card-border text-foreground/50'}`}>{i+1}</span>
-                    <div><div className="font-medium">{s.title}</div><div className="text-xs text-foreground/40">{s.body}</div></div>
+                  <div key={i} className="p-3 rounded-lg bg-background/50 border border-card-border">
+                    <div className="flex items-start gap-3">
+                      <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-accent text-white' : 'bg-card-border text-foreground/50'}`}>{i+1}</span>
+                      <div className="flex-1 space-y-1.5">
+                        <div>
+                          <div className="text-[10px] text-accent font-bold">제목</div>
+                          <div className="text-sm font-bold">{s.title}</div>
+                        </div>
+                        {s.subtitle && (
+                          <div>
+                            <div className="text-[10px] text-foreground/40 font-bold">부제목</div>
+                            <div className="text-sm text-foreground/70">{s.subtitle}</div>
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-[10px] text-foreground/40 font-bold">본문</div>
+                          <div className="text-sm text-foreground/60 leading-relaxed">{s.body}</div>
+                        </div>
+                        {s.example && (
+                          <div>
+                            <div className="text-[10px] text-foreground/30 font-bold">예시/팁</div>
+                            <div className="text-xs text-foreground/50 italic">{s.example}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
