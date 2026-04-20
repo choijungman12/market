@@ -101,13 +101,40 @@ export async function generateNanoBananaImage(prompt: string): Promise<string | 
   }
 }
 
-// ===== JSON 파싱 =====
+// ===== JSON 파싱 (견고하게) =====
 function extractJson(text: string): unknown {
-  for (const pattern of [/```(?:json)?\s*([\s\S]*?)```/, /\[[\s\S]*\]/, /\{[\s\S]*\}/]) {
-    const m = text.match(pattern);
-    if (m) { try { return JSON.parse(m[1] || m[0]); } catch {} }
+  if (!text || !text.trim()) throw new Error('AI 응답이 비어있습니다.');
+
+  // 1. 코드블록
+  const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlock) {
+    try { return JSON.parse(codeBlock[1].trim()); } catch {}
   }
-  throw new Error('AI 응답 파싱 실패. 다시 시도해주세요.');
+
+  // 2. 가장 큰 배열 찾기 (중첩 지원)
+  const findArrays = (str: string): string[] => {
+    const results: string[] = [];
+    let depth = 0, start = -1;
+    for (let i = 0; i < str.length; i++) {
+      if (str[i] === '[') { if (depth === 0) start = i; depth++; }
+      else if (str[i] === ']') { depth--; if (depth === 0 && start !== -1) { results.push(str.slice(start, i + 1)); start = -1; } }
+    }
+    return results;
+  };
+
+  const arrays = findArrays(text).sort((a, b) => b.length - a.length);
+  for (const arr of arrays) {
+    try { return JSON.parse(arr); } catch {}
+  }
+
+  // 3. 객체
+  const obj = text.match(/\{[\s\S]*\}/);
+  if (obj) {
+    try { return JSON.parse(obj[0]); } catch {}
+  }
+
+  console.error('[HookFlow] JSON 파싱 실패 원문 (처음 500자):', text.slice(0, 500));
+  throw new Error(`AI 응답 파싱 실패. 다시 시도해주세요. (원문: ${text.slice(0, 100)})`);
 }
 
 // ===== 카테고리 정의 =====
@@ -202,7 +229,7 @@ export async function fetchTrends(forceRefresh = false): Promise<TrendItem[]> {
 
 JSON 배열만 반환:
 [{"title":"","description":"","traffic":"","views":"","category":"","relatedQueries":[""]}]`,
-      { temp: 0.3, max: 6000, webSearch: true }
+      { temp: 0.3, max: 10000, webSearch: true }
     );
 
     const arr = extractJson(text) as Record<string, unknown>[];
@@ -258,34 +285,26 @@ export async function generateHooks(
 ) {
   const toneMap: Record<string, string> = { informative: '정보형', provocative: '자극형', storytelling: '스토리형' };
   const text = await callClaude(
-    `당신은 한국 SNS 마케팅 전문가입니다.
+    `한국 SNS 마케팅 전문가. 웹 검색으로 최신 팩트 수집 후 대본 작성. 한국어 맞춤법 완벽. 마지막에 반드시 순수 JSON 배열만 출력.`,
+    `토픽: "${topic.title}"
+설명: ${topic.description}
+톤: ${toneMap[tone] || tone}
 
-필수 준수 사항:
-1. 반드시 실제 웹 검색으로 최신 정보를 수집한 후 작성 (추측/가상 금지)
-2. 정확한 사실, 최신 데이터, 실제 뉴스 기반으로만 작성
-3. 모든 한국어 맞춤법과 띄어쓰기 완벽하게 (오타 절대 금지)
-4. 전문 용어 사용 시 정확한 표현 사용
-5. 숫자, 날짜, 이름 등 팩트는 검색 결과에서만 인용
-6. 반드시 JSON만 반환 (마크다운 코드 블록 금지)`,
-    `토픽 "${topic.title}"에 대해 웹 검색으로 최신 정보를 찾은 후, ${toneMap[tone] || tone} 톤의 SNS 후킹 대본 ${count}개를 만드세요.
+작업:
+1. 웹 검색으로 이 토픽의 최신 팩트/데이터/뉴스 수집
+2. 검색 결과 기반으로 후킹 대본 ${count}개 작성
 
-주제 상세: ${topic.description}
+각 대본 필드:
+- headline: 후킹 제목 (15자 이내)
+- subheadline: 부제목 (30자 이내)
+- bodyPoints: 핵심 5개 배열 (각 40자 이내, 실제 팩트 포함)
+- callToAction: CTA
+- targetAudience: 타겟
 
-반드시 다음 규칙 준수:
-- 웹에서 찾은 실제 정보, 최신 데이터, 구체적 숫자/사실 반영
-- 한국어 맞춤법 100% 정확 (오타 시 재작성)
-- 추측 금지, 검증된 정보만
+중요: 최종 출력은 반드시 아래 JSON 배열 형식으로만. 다른 설명 텍스트 금지.
 
-각 콘텐츠:
-- headline: 후킹 제목 (15자 이내, 클릭 유발)
-- subheadline: 부제목 (30자 이내, 궁금증 증폭)
-- bodyPoints: 핵심 포인트 5개 배열 (각 40자 이내, 실제 팩트 포함)
-- callToAction: 행동 유도 문구
-- targetAudience: 타겟 독자
-
-JSON 배열만 반환:
-[{"headline":"","subheadline":"","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`,
-    { temp: 0.7, max: 3000, webSearch: true }
+[{"headline":"...","subheadline":"...","bodyPoints":["...","...","...","...","..."],"callToAction":"...","targetAudience":"..."}]`,
+    { temp: 0.7, max: 8000, webSearch: true }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
