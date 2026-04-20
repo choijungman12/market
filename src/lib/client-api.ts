@@ -21,10 +21,22 @@ export function hasGeminiKey(): boolean {
   return !!getKey('gemini_key');
 }
 
-// ===== Claude API 호출 =====
-async function callClaude(system: string, user: string, opts: { temp?: number; max?: number } = {}): Promise<string> {
+// ===== Claude API 호출 (웹 검색 옵션) =====
+async function callClaude(system: string, user: string, opts: { temp?: number; max?: number; webSearch?: boolean } = {}): Promise<string> {
   const key = getKey('anthropic_key');
   if (!key) throw new Error('Anthropic API 키를 설정 페이지에서 입력해주세요.');
+
+  const body: Record<string, unknown> = {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: opts.max || 2048,
+    temperature: opts.temp ?? 0.7,
+    system,
+    messages: [{ role: 'user', content: user }],
+  };
+
+  if (opts.webSearch) {
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+  }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -34,13 +46,7 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: opts.max || 2048,
-      temperature: opts.temp ?? 0.7,
-      system,
-      messages: [{ role: 'user', content: user }],
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -48,7 +54,12 @@ async function callClaude(system: string, user: string, opts: { temp?: number; m
     throw new Error(`Claude 오류(${res.status}): ${e.slice(0, 150)}`);
   }
   const d = await res.json();
-  return d.content?.[0]?.text || '';
+  // 웹 검색 결과 + 최종 텍스트 모두 합침
+  let text = '';
+  for (const block of d.content || []) {
+    if (block.type === 'text') text += block.text;
+  }
+  return text;
 }
 
 // ===== NanoBanana (Gemini) 이미지 생성 =====
@@ -247,10 +258,34 @@ export async function generateHooks(
 ) {
   const toneMap: Record<string, string> = { informative: '정보형', provocative: '자극형', storytelling: '스토리형' };
   const text = await callClaude(
-    'SNS 마케팅 전문가. 한국어. 오타금지. JSON만.',
-    `토픽:"${topic.title}" 톤:${toneMap[tone] || tone}
-후킹콘텐츠 ${count}개. [{"headline":"15자이내","subheadline":"30자이내","bodyPoints":["5개각40자"],"callToAction":"행동유도","targetAudience":"타겟"}]`,
-    { temp: 0.8, max: 1500 }
+    `당신은 한국 SNS 마케팅 전문가입니다.
+
+필수 준수 사항:
+1. 반드시 실제 웹 검색으로 최신 정보를 수집한 후 작성 (추측/가상 금지)
+2. 정확한 사실, 최신 데이터, 실제 뉴스 기반으로만 작성
+3. 모든 한국어 맞춤법과 띄어쓰기 완벽하게 (오타 절대 금지)
+4. 전문 용어 사용 시 정확한 표현 사용
+5. 숫자, 날짜, 이름 등 팩트는 검색 결과에서만 인용
+6. 반드시 JSON만 반환 (마크다운 코드 블록 금지)`,
+    `토픽 "${topic.title}"에 대해 웹 검색으로 최신 정보를 찾은 후, ${toneMap[tone] || tone} 톤의 SNS 후킹 대본 ${count}개를 만드세요.
+
+주제 상세: ${topic.description}
+
+반드시 다음 규칙 준수:
+- 웹에서 찾은 실제 정보, 최신 데이터, 구체적 숫자/사실 반영
+- 한국어 맞춤법 100% 정확 (오타 시 재작성)
+- 추측 금지, 검증된 정보만
+
+각 콘텐츠:
+- headline: 후킹 제목 (15자 이내, 클릭 유발)
+- subheadline: 부제목 (30자 이내, 궁금증 증폭)
+- bodyPoints: 핵심 포인트 5개 배열 (각 40자 이내, 실제 팩트 포함)
+- callToAction: 행동 유도 문구
+- targetAudience: 타겟 독자
+
+JSON 배열만 반환:
+[{"headline":"","subheadline":"","bodyPoints":["","","","",""],"callToAction":"","targetAudience":""}]`,
+    { temp: 0.7, max: 3000, webSearch: true }
   );
   const p = extractJson(text);
   return Array.isArray(p) ? p : [p];
@@ -305,26 +340,29 @@ export async function generateSlideImages(
       const isLast = (i + j) === slides.length - 1;
 
       const prompt = `${isFirst ?
-`스크롤을 멈추게 하는 강렬한 SNS 메인 이미지.
-"${title}" 한국어 텍스트를 이미지 정중앙에 크고 굵게 배치.
-배경: ${body} 장면을 표현하는 실제 사진.
-텍스트: 흰색, 두꺼운 고딕체, 그림자 효과로 선명하게.` :
+`스크롤을 멈추게 하는 강렬한 한국 SNS 메인 이미지.
+반드시 "${title}" 이 한국어 텍스트를 이미지 정중앙에 크고 굵게 정확히 표시.
+배경: ${body} 장면의 실제 사진.
+텍스트 스타일: 흰색 두꺼운 고딕체, 검정 그림자로 선명하게.` :
 isLast ?
-`SNS 마지막 장 CTA 이미지.
-"${title}" 한국어 텍스트를 중앙에 배치.
-깔끔하고 행동을 유도하는 디자인.` :
-`SNS 콘텐츠 이미지.
-"${title}" 한국어 텍스트를 상단에 배치.
-배경: ${body} 내용을 보여주는 실제 사진.
-텍스트: 흰색, 굵은 글씨, 그림자 효과.`}
+`한국 SNS 마지막 장 CTA 이미지.
+반드시 "${title}" 이 한국어 텍스트를 중앙에 정확히 표시.
+행동을 유도하는 깔끔한 디자인.` :
+`한국 SNS 콘텐츠 이미지.
+반드시 "${title}" 이 한국어 텍스트를 상단에 정확히 표시.
+배경: ${body} 내용의 실제 사진.
+텍스트 스타일: 흰색 굵은 글씨, 그림자 효과.`}
 
-중요 규칙:
-- 실제 사진처럼 사실적인 이미지 (AI 느낌 금지, 일러스트 금지)
-- 실제 사람, 실제 장소, 실제 물건
-- DSLR 카메라로 촬영한 것 같은 고퀄리티
-- 자연스러운 조명, 따뜻한 색감
-- ${ratio[platform]} 비율
-- 한국어 텍스트가 반드시 이미지 위에 포함되어야 함`;
+절대 지켜야 할 규칙 (CRITICAL RULES):
+1. 한국어 텍스트는 반드시 위에 명시된 그대로 정확히 표기 (오타 절대 금지)
+2. 한글 자음/모음이 깨지거나 이상한 글자가 나오면 안 됨
+3. 제시된 문구와 다른 한국어 텍스트 생성 금지
+4. 실제 DSLR로 촬영한 사진처럼 사실적 (AI/일러스트 스타일 금지)
+5. 실제 한국인, 한국 장소, 실제 물건 사용
+6. 자연스러운 조명, 고해상도, 시네마틱 색감
+7. 비율: ${ratio[platform]}
+
+한국어 텍스트 정확성 검증: 출력 전 이미지 내 한국어 텍스트가 "${title}"과 정확히 일치하는지 확인.`;
 
       return generateNanoBananaImage(prompt)
         .then(img => { results[i + j] = img || ''; })
