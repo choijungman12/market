@@ -94,8 +94,8 @@ export default function GeneratePage() {
 
       setCarousel(result);
 
-      // 히스토리 저장
-      saveToHistory({
+      // 히스토리 저장 (IndexedDB - 이미지 포함)
+      await saveToHistory({
         topic: topic?.title || '커스텀',
         headline: selectedHook.headline,
         platform,

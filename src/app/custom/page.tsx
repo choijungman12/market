@@ -41,7 +41,7 @@ export default function CustomPage() {
       setImages(imgs);
       setDone(true);
 
-      saveToHistory({
+      await saveToHistory({
         topic: '커스텀 대본',
         headline: validScripts[0].title || '커스텀',
         platform,

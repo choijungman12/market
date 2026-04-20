@@ -394,44 +394,19 @@ isLast ?
   return results;
 }
 
-// ===== 작업 히스토리 저장/조회 =====
-const HISTORY_KEY = 'hookflow_history';
+// ===== 작업 히스토리 (IndexedDB - 대용량 이미지 저장) =====
+import { saveHistoryDB, getHistoryDB, deleteHistoryDB, clearHistoryDB } from './history-db';
 
-export function saveToHistory(entry: {
+export async function saveToHistory(entry: {
   topic: string; headline: string; platform: string;
   slideCount: number; images: string[]; scripts: { title: string; body: string }[];
-}) {
-  if (typeof window === 'undefined') return;
-  const history = getHistory();
-  // 이미지는 용량이 크므로 저장하지 않음 (localStorage 5MB 제한)
-  history.unshift({
-    id: `h_${Date.now()}`,
-    createdAt: new Date().toISOString(),
-    topic: entry.topic,
-    headline: entry.headline,
-    platform: entry.platform,
-    slideCount: entry.slideCount,
-    imageCount: entry.images.filter(Boolean).length,
-    scripts: entry.scripts,
-  });
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 100)));
-  } catch {
-    // 용량 초과 시 오래된 기록 삭제 후 재시도
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
-  }
+}): Promise<void> {
+  await saveHistoryDB(entry);
+  // 기존 localStorage 데이터 정리 (마이그레이션)
+  if (typeof window !== 'undefined') localStorage.removeItem('hookflow_history');
 }
 
-export function getHistory(): { id: string; createdAt: string; topic: string; headline: string; platform: string; slideCount: number; imageCount?: number; scripts: { title: string; body: string }[] }[] {
-  if (typeof window === 'undefined') return [];
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
-}
-
-export function deleteHistory(id: string) {
-  if (typeof window === 'undefined') return;
-  const history = getHistory().filter(h => h.id !== id);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-}
+export { getHistoryDB as getHistory, deleteHistoryDB as deleteHistory, clearHistoryDB as clearAllHistory };
 
 // ===== 랜딩 페이지 HTML =====
 export async function generateLandingHtml(data: {
